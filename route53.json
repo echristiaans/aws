@@ -1,0 +1,128 @@
+# this is the Route53 Cloudformation template
+
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description" : "Dirtybit AWS Route53 Stack",
+  "Resources": {
+    "dirtybitio": {
+      "Type" : "AWS::Route53::HostedZone",
+      "Properties" : {
+        "Name" : "dirtybit.io" }
+      },
+    "dirtybitnl": {
+      "Type" : "AWS::Route53::HostedZone",
+      "Properties" : {
+        "Name" : "dirtybit.nl" }
+      },
+    "mcitsnl": {
+      "Type" : "AWS::Route53::HostedZone",
+      "Properties" : {
+        "Name" : "mcits.nl" }
+      },
+    "christiaansnet": {
+      "Type" : "AWS::Route53::HostedZone",
+      "Properties" : {
+        "Name" : "christiaans.net" }
+      },
+    "conmenio": {
+      "Type" : "AWS::Route53::HostedZone",
+      "Properties" : {
+        "Name" : "conmen.io" }
+      },
+    "ascodeln": {
+      "Type" : "AWS::Route53::HostedZone",
+      "Properties" : {
+        "Name" : "ascode.nl" }
+      },
+    "dbmon01": {
+     "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneName": "dirtybit.io.",
+        "Name": "db-mon-m01.dirtybit.io.",
+        "ResourceRecords": [ "217.100.96.52" ],
+        "TTL": "3600",
+        "Type": "A"
+       }
+     },
+     "dbrepo": {
+      "Type": "AWS::Route53::RecordSet",
+       "Properties": {
+         "HostedZoneName": "dirtybit.io.",
+         "Name": "repo.dirtybit.io.",
+         "ResourceRecords": [ "217.100.96.52" ],
+         "TTL": "3600",
+         "Type": "A"
+        }
+      },
+      "dbhome": {
+       "Type": "AWS::Route53::RecordSet",
+        "Properties": {
+          "HostedZoneName": "dirtybit.io.",
+          "Name": "home.dirtybit.io.",
+          "ResourceRecords": [ "217.100.96.50" ],
+          "TTL": "3600",
+          "Type": "A"
+         }
+       },
+       "dbvpn": {
+        "Type": "AWS::Route53::RecordSet",
+         "Properties": {
+           "HostedZoneName": "dirtybit.io.",
+           "Name": "vpn.dirtybit.io.",
+           "ResourceRecords": [ "217.100.96.51" ],
+           "TTL": "3600",
+           "Type": "A"
+          }
+        },
+        "mcitstxt": {
+         "Type": "AWS::Route53::RecordSet",
+          "Properties": {
+            "HostedZoneName": "mcits.nl.",
+            "Name": "@",
+            "ResourceRecords": [ 'v=spf1 include:spf.mcits.nl ~all', 'google-site-verification=2ovJ-7QgDRYUxeGscK-4os2vGnnVkCyZateiT4_5qZc' ],
+            "TTL": "3600",
+            "Type": "TXT"
+           }
+         },
+         "mcitsmx": {
+          "Type": "AWS::Route53::RecordSet",
+           "Properties": {
+             "HostedZoneName": "mcits.nl.",
+             "Name": "@",
+             "ResourceRecords": [ "1 aspmx.l.google.com", "5 alt1.aspmx.l.google.com", "5 alt2.aspmx.l.google.com", "10 aspmx2.googlemail.com", "10 aspmx3.googlemail.com" ],
+             "TTL": "3600",
+             "Type": "MX"
+            }
+          },
+          "christiaansmx": {
+           "Type": "AWS::Route53::RecordSet",
+            "Properties": {
+              "HostedZoneName": "christiaans.net.",
+              "Name": "@",
+              "ResourceRecords": [ "1 aspmx.l.google.com", "5 alt1.aspmx.l.google.com", "5 alt2.aspmx.l.google.com", "10 aspmx2.googlemail.com", "10 aspmx3.googlemail.com" ],
+              "TTL": "3600",
+              "Type": "MX"
+             }
+           },
+           "christiaanshome": {
+            "Type": "AWS::Route53::RecordSet",
+             "Properties": {
+               "HostedZoneName": "christiaans.net.",
+               "Name": ["home.christiaans.net.", "thuis.christiaans.net." ],
+               "ResourceRecords": [ "217.100.96.50" ],
+               "TTL": "3600",
+               "Type": "A"
+              }
+            },
+            "christiaansvpn": {
+             "Type": "AWS::Route53::RecordSet",
+              "Properties": {
+                "HostedZoneName": "christiaans.net.",
+                "Name": "vpn.christiaans.net.",
+                "ResourceRecords": [ "217.100.96.51" ],
+                "TTL": "3600",
+                "Type": "A"
+               }
+             },
+  }
+}
