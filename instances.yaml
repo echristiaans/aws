@@ -11,9 +11,9 @@ Parameters:
     Default: DefaultNetworkLayer
 Mappings:
   RegionMap:
-  eu-central-1:
-    "centos73": "ami-2540f74a"
-    "windows2016": "ami-5b7ac534"
+    eu-central-1:
+      "centos73": "ami-2540f74a"
+      "windows2016": "ami-5b7ac534"
 Resources:
   instance1int:
     Type: AWS::EC2::NetworkInterface
@@ -21,9 +21,12 @@ Resources:
       Description: instance1 NetworkInterface
       SourceDestCheck: "true"
       PrivateIpAddress: 10.20.0.10
-      SubnetId: Fn::ImportValue: !Sub "${NetworkStackName}-SubnetID"
+      SubnetId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-sn1"
       GroupSet:
-        - Fn::ImportValue: !Sub "${NetworkStackName}-sgwebportsfromany"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgwebportsfromany"
   instance1:
     Type: AWS::EC2::Instance
     Properties:
@@ -38,17 +41,17 @@ Resources:
           - Ref: "AWS::Region"
           - "centos73"
       InstanceType: "t2.nano"
-      KeyName: ""
+      #KeyName: ""
       Monitoring: "false"
       Tags:
         - Key: "Name"
           Value:  "instance1"
       BlockDeviceMappings:
-        DeviceName: "/dev/sda1"
+      - DeviceName: "/dev/sda1"
         Ebs:
           VolumeType: "standard"
           DeleteOnTermination: "true"
           VolumeSize: "50"
       NetworkInterfaces:
-        DeviceIndex: "0"
+      - DeviceIndex: 0
         NetworkInterfaceId: !Ref instance1int

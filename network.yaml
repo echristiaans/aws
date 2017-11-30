@@ -72,17 +72,17 @@ Resources:
         CidrIp: 127.0.0.1/32
 Outputs:
   vpc1ID:
-    Description: VPC ID
+    Description: VPC 1
     Value: !Ref vpc1
     Export:
-      Name: !Sub "${AWS::StackName}-VPCID"
+      Name: !Sub "${AWS::StackName}-vpc1"
   sn1:
-    Description: subnet1 ID
+    Description: subnet1
     Value: !Ref sn1
     Export:
-      Name: !Sub "${AWS::StackName}-SubnetID"
+      Name: !Sub "${AWS::StackName}-sn1"
   sgwebportsfromany:
-    Description: The security group ID to use for public web servers
+    Description: The security group to use for public web servers
     Value: !GetAtt sgwebportsfromany.GroupId
     Export:
       Name: !Sub "${AWS::StackName}-sgwebportsfromany"
