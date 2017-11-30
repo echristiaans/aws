@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Ascode.nl AWS Network Stack
+Resources:
+  vpc1:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      CidrBlock: 10.20.0.0/16
+      Tags:
+        - Key: foo
+          Value: bar
+  sn1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc1
+      CidrBlock: 10.20.0.0/24
+#      AvailabilityZone: "eu-central-1a/b/c"
+  igw1:
+    Type: AWS::EC2::InternetGateway
+  VPC1GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref vpc1
+      InternetGatewayId: !Ref igw1
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref vpc1
+  defroute:
+    Type: AWS::EC2::Route
+    DependsOn: VPC1GatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref igw1
+  sn1RouteTableAssociation:
+    Type:  AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref sn1
+      RouteTableId: !Ref PublicRouteTable
+  sn1NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref sn1
+      NetworkAclId: !GetAtt vpc1.DefaultNetworkAcl
+  sgwebportsfromany:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable Web Ports Ingress
+      VpcId: !Ref vpc1
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: "80"
+        ToPort: "80"
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: "443"
+        ToPort: "443"
+        CidrIp: 0.0.0.0/0
+  sgwithoutegress:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Limits security group egress traffic
+      VpcId: !Ref vpc1
+      SecurityGroupEgress:
+      - IpProtocol: "-1"
+        CidrIp: 127.0.0.1/32
+Outputs:
+  vpc1ID:
+    Description: VPC ID
+    Value: !Ref vpc1
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCID"
+  sn1:
+    Description: subnet1 ID
+    Value: !Ref sn1
+    Export:
+      Name: !Sub "${AWS::StackName}-SubnetID"
+  sgwebportsfromany:
+    Description: The security group ID to use for public web servers
+    Value: !GetAtt sgwebportsfromany.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-SecurityGroupID"

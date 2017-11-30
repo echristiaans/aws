@@ -79,7 +79,7 @@
           "Properties": {
             "HostedZoneName": "mcits.nl.",
             "Name": "@",
-            "ResourceRecords": [ 'v=spf1 include:spf.mcits.nl ~all', 'google-site-verification=2ovJ-7QgDRYUxeGscK-4os2vGnnVkCyZateiT4_5qZc' ],
+            "ResourceRecords": [ "v=spf1 include:spf.mcits.nl ~all", "google-site-verification=2ovJ-7QgDRYUxeGscK-4os2vGnnVkCyZateiT4_5qZc" ],
             "TTL": "3600",
             "Type": "TXT"
            }
