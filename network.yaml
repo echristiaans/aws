@@ -16,7 +16,10 @@ Resources:
     Properties:
       VpcId: !Ref vpc1
       CidrBlock: 10.20.0.0/24
-#      AvailabilityZone: "eu-central-1a/b/c"
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
   igw1:
     Type: AWS::EC2::InternetGateway
   VPC1GatewayAttachment:
@@ -82,4 +85,4 @@ Outputs:
     Description: The security group ID to use for public web servers
     Value: !GetAtt sgwebportsfromany.GroupId
     Export:
-      Name: !Sub "${AWS::StackName}-SecurityGroupID"
+      Name: !Sub "${AWS::StackName}-sgwebportsfromany"

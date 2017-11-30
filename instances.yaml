@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Ascode.nl AWS Instance Stack
+Parameters:
+  NetworkStackName:
+    Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group, that will be used in this stack
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: DefaultNetworkLayer
+Mappings:
+  RegionMap:
+  eu-central-1:
+    "centos73": "ami-2540f74a"
+    "windows2016": "ami-5b7ac534"
+Resources:
+  instance1int:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: instance1 NetworkInterface
+      SourceDestCheck: "true"
+      PrivateIpAddress: 10.20.0.10
+      SubnetId: Fn::ImportValue: !Sub "${NetworkStackName}-SubnetID"
+      GroupSet:
+        - Fn::ImportValue: !Sub "${NetworkStackName}-sgwebportsfromany"
+  instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      DisableApiTermination: "false"
+      ImageId:
+        Fn::FindInMap:
+          - "RegionMap"
+          - Ref: "AWS::Region"
+          - "centos73"
+      InstanceType: "t2.nano"
+      KeyName: ""
+      Monitoring: "false"
+      Tags:
+        - Key: "Name"
+          Value:  "instance1"
+      BlockDeviceMappings:
+        DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: "standard"
+          DeleteOnTermination: "true"
+          VolumeSize: "50"
+      NetworkInterfaces:
+        DeviceIndex: "0"
+        NetworkInterfaceId: !Ref instance1int
