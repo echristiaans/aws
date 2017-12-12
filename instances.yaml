@@ -27,6 +27,8 @@ Resources:
       GroupSet:
         - Fn::ImportValue:
             !Sub "${NetworkStackName}-sgwebportsfromany"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsshfromany"
   instance1:
     Type: AWS::EC2::Instance
     Properties:
@@ -41,7 +43,7 @@ Resources:
           - Ref: "AWS::Region"
           - "centos73"
       InstanceType: "t2.nano"
-      #KeyName: ""
+      KeyName: "AWSDeploy"
       Monitoring: "false"
       Tags:
         - Key: "Name"

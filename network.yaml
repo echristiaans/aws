@@ -62,6 +62,16 @@ Resources:
         FromPort: "443"
         ToPort: "443"
         CidrIp: 0.0.0.0/0
+  sgsshfromany:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH Ingress
+      VpcId: !Ref vpc1
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: "22"
+        ToPort: "22"
+        CidrIp: 0.0.0.0/0
   sgwithoutegress:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -86,3 +96,8 @@ Outputs:
     Value: !GetAtt sgwebportsfromany.GroupId
     Export:
       Name: !Sub "${AWS::StackName}-sgwebportsfromany"
+  sgsshfromany:
+    Description: The security group to use for public SSH access
+    Value: !GetAtt sgsshfromany.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-sgsshfromany"      
