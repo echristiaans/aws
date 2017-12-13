@@ -7,14 +7,245 @@ Resources:
     Properties:
       BucketName: ascode-wildrydes
       AccessControl: PublicRead
-      WebSiteConfiguration:
+      WebsiteConfiguration:
         IndexDocument: index.html
         ErrorDocument: error.html
     DeletionPolicy: Delete
+  ascodes3bucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Id: ascodes3bucketPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref ascodes3bucket
+                - /*
+      Bucket: !Ref ascodes3bucket
+  ascodecognitouserpool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: ascode-wildrydes
+  ascodecognitouserpoolclient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: WildRydesWebApp
+      GenerateSecret: false
+      UserPoolId: !Ref ascodecognitouserpool
+  ridestable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Rides
+      AttributeDefinitions:
+        - AttributeName: "RideId"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "RideId"
+          KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: "5"
+        WriteCapacityUnits: "5"
+  lambdaiamrole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: "LambdaDynamo"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "dynamodb:PutItem"
+                Resource: !GetAtt [ridestable, Arn]
+      RoleName: WildRydesLambda
+  wilderydeslambdafunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: !Sub |
+          const randomBytes = require('crypto').randomBytes;
+          const AWS = require('aws-sdk');
+          const ddb = new AWS.DynamoDB.DocumentClient();
+          const fleet = [
+            {
+              Name: 'Bucephalus',
+              Color: 'Golden',
+              Gender: 'Male',
+            },
+            {
+              Name: 'Shadowfax',
+              Color: 'White',
+              Gender: 'Male',
+            },
+            {
+              Name: 'Rocinante',
+              Color: 'Yellow',
+              Gender: 'Female',
+            },
+          ];
+
+          exports.handler = (event, context, callback) => {
+            if (!event.requestContext.authorizer) {
+              errorResponse('Authorization not configured', context.awsRequestId, callback);
+              return;
+            }
+
+            const rideId = toUrlString(randomBytes(16));
+            console.log('Received event (', rideId, '): ', event);
+
+            // Because we're using a Cognito User Pools authorizer, all of the claims
+            // included in the authentication token are provided in the request context.
+            // This includes the username as well as other attributes.
+            const username = event.requestContext.authorizer.claims['cognito:username'];
+
+            // The body field of the event in a proxy integration is a raw string.
+            // In order to extract meaningful values, we need to first parse this string
+            // into an object. A more robust implementation might inspect the Content-Type
+            // header first and use a different parsing strategy based on that value.
+            const requestBody = JSON.parse(event.body);
+            const pickupLocation = requestBody.PickupLocation;
+            const unicorn = findUnicorn(pickupLocation);
+
+            recordRide(rideId, username, unicorn).then(() => {
+              // You can use the callback function to provide a return value from your Node.js
+              // Lambda functions. The first parameter is used for failed invocations. The
+              // second parameter specifies the result data of the invocation.
+
+              // Because this Lambda function is called by an API Gateway proxy integration
+              // the result object must use the following structure.
+              callback(null, {
+                statusCode: 201,
+                body: JSON.stringify({
+                  RideId: rideId,
+                  Unicorn: unicorn,
+                  UnicornName: unicorn.Name,
+                  Eta: '30 seconds',
+                  Rider: username,
+                }),
+                headers: {
+                  'Access-Control-Allow-Origin': '*',
+                },
+              });
+            }).catch((err) => {
+                console.error(err);
+
+                // If there is an error during processing, catch it and return
+                // from the Lambda function successfully. Specify a 500 HTTP status
+                // code and provide an error message in the body. This will provide a
+                // more meaningful error response to the end client.
+                errorResponse(err.message, context.awsRequestId, callback)
+            });
+          };
+
+          // This is where you would implement logic to find the optimal unicorn for
+          // this ride (possibly invoking another Lambda function as a microservice.)
+          // For simplicity, we'll just pick a unicorn at random.
+          function findUnicorn(pickupLocation) {
+            console.log('Finding unicorn for ', pickupLocation.Latitude, ', ', pickupLocation.Longitude);
+            return fleet[Math.floor(Math.random() * fleet.length)];
+          }
+
+          function recordRide(rideId, username, unicorn) {
+            return ddb.put({
+              TableName: 'Rides',
+              Item: {
+                RideId: rideId,
+                User: username,
+                Unicorn: unicorn,
+                UnicornName: unicorn.Name,
+                RequestTime: new Date().toISOString(),
+              },
+            }).promise();
+          }
+
+          function toUrlString(buffer) {
+            return buffer.toString('base64')
+              .replace(/\+/g, '-')
+              .replace(/\//g, '_')
+              .replace(/=/g, '');
+          }
+
+          function errorResponse(errorMessage, awsRequestId, callback) {
+            callback(null, {
+            statusCode: 500,
+            body: JSON.stringify({
+              Error: errorMessage,
+              Reference: awsRequestId,
+            }),
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+            },
+           });
+          }
+      FunctionName: "RequestUnicorn"
+      Handler: index.handler
+      Role: !GetAtt [lambdaiamrole, Arn]
+      Runtime: "nodejs6.10"
+  apigateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: "WildRydes"
+  cognitoauthorizerapi:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      ProviderARNs:
+        - !GetAtt [ascodecognitouserpool, Arn]
+      RestApiId: !Ref apigateway
+      Type: "COGNITO_USER_POOLS"
+      IdentitySource: "method.request.header.Authorization"
+      Name: "WildRydes"
+  apiresource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref apigateway
+      ParentId: !GetAtt [apigateway, RootResourceId]
+      PathPart: "ride"
+  apilambdapermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt [wilderydeslambdafunction, Arn]
+      Action: 'lambda:InvokeFunction'
+      Principal: "apigateway.amazonaws.com"
+  apimethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref apigateway
+      ResourceId: !Ref apiresource
+      HttpMethod: "POST"
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${wilderydeslambdafunction.Arn}/invocations
+      AuthorizationType: "COGNITO_USER_POOLS"
+      AuthorizerId: !Ref cognitoauthorizerapi
 Outputs:
   WebsiteURL:
-    Value: !GetAtt [S3Bucket, WebsiteURL]
-     Description: URL for website hosted on S3
+    Value: !GetAtt [ascodes3bucket, WebsiteURL]
+    Description: URL for website hosted on S3
   S3BucketSecureURL:
-    Value: !Join ['', ['https://', !GetAtt [S3Bucket, DomainName]]]
+    Value: !Join ['', ['https://', !GetAtt [ascodes3bucket, DomainName]]]
     Description: Name of S3 bucket to hold website content
+  CognitoArn:
+    Value: !Ref ascodecognitouserpool
+    Description: The Pool id for the Cognito User Pool
+  CognitoClientId:
+    Value: !Ref ascodecognitouserpoolclient
+    Description: The Cognito Client ID for WildRydesWebApp
+  DynamoTableId:
+    Value: !GetAtt [ridestable, Arn]
+    Description: The ARN of the DynamoDB Rides Table
