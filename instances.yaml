@@ -51,6 +51,7 @@ Resources:
       BlockDeviceMappings:
       - DeviceName: "/dev/sda1"
         Ebs:
+          Encrypted: true
           VolumeType: "standard"
           DeleteOnTermination: "true"
           VolumeSize: "50"

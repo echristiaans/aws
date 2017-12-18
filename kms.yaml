@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Ascode.nl IAM KMS Key Stack
+Parameters:
+  UserStackName:
+    Description: Name of an active CloudFormation stack that contains the user resources that will be used in this stack
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: UserStack
+Resources:
+  cmk1:
+  Type: "AWS::KMS::Key"
+  Properties:
+   Description: "The default Master Key"
+  KeyPolicy:
+    Version: "2012-10-17"
+    Id: "CMK1-default"
+    Statement:
+      -
+        Sid: "Allow administration of the key"
+        Effect: "Allow"
+        Principal:
+          AWS:
+            Fn::ImportValue:
+              !Sub "${UserStackName}-iamechristiaans"
+        Action:
+            - "kms:Create*"
+            - "kms:Describe*"
+            - "kms:Enable*"
+            - "kms:List*"
+            - "kms:Put*"
+            - "kms:Update*"
+            - "kms:Revoke*"
+            - "kms:Disable*"
+            - "kms:Get*"
+            - "kms:Delete*"
+            - "kms:ScheduleKeyDeletion"
+            - "kms:CancelKeyDeletion"
+          Resource: "*"
+      -
+        Sid: "Allow use of the key"
+        Effect: "Allow"
+        Principal:
+          AWS:
+            Fn::ImportValue:
+              !Sub "${UserStackName}-iamsomeotheruser"
+        Action:
+          - "kms:Encrypt"
+          - "kms:Decrypt"
+          - "kms:ReEncrypt*"
+          - "kms:GenerateDataKey*"
+          - "kms:DescribeKey"
+        Resource: "*"
+Outputs:
+  cmk1id:
+    Description: Customer Master Key 1 ID
+    Value: !GetAtt [cm k1, Arn]
+    Export:
+      Name: !Sub "${AWS::StackName}-cmk1"

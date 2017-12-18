@@ -27,3 +27,9 @@ Resources:
      Type: AWS::IAM::AccessKey
      Properties:
        UserName: !Ref echristiaans
+Outputs:
+  userechristiaans:
+    Description: Erik Christiaans IAM User Name
+    Value: !GetAtt [echristiaans, Arn]
+    Export:
+      Name: !Sub "${AWS::StackName}-iamechristiaans"
