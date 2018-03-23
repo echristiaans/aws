@@ -9,8 +9,8 @@ Resources:
       EnableDnsHostnames: "true"
       CidrBlock: 10.20.0.0/16
       Tags:
-        - Key: foo
-          Value: bar
+        - Key: name
+          Value: MyVPC
   sn1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -100,4 +100,4 @@ Outputs:
     Description: The security group to use for public SSH access
     Value: !GetAtt sgsshfromany.GroupId
     Export:
-      Name: !Sub "${AWS::StackName}-sgsshfromany"      
+      Name: !Sub "${AWS::StackName}-sgsshfromany"
