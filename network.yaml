@@ -186,6 +186,16 @@ Resources:
         FromPort: "22"
         ToPort: "22"
         CidrIp: 0.0.0.0/0
+  sgsshfromhome:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH Ingress from home IPs
+      VpcId: !Ref vpc1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: "22"
+          ToPort: "22"
+          CidrIp: 217.100.96.50/32
   sgwithoutegress:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -240,3 +250,8 @@ Outputs:
     Value: !GetAtt sgsshfromany.GroupId
     Export:
       Name: !Sub "${AWS::StackName}-sgsshfromany"
+  sgsshfromhome:
+    Description: The security group to use for SSH access from home
+    Value: !GetAtt sgsshfromhome.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-sgsshfromhome"
