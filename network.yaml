@@ -11,15 +11,64 @@ Resources:
       Tags:
         - Key: name
           Value: MyVPC
-  sn1:
+  pubsn1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref vpc1
-      CidrBlock: 10.20.0.0/24
+      CidrBlock: 10.20.10.0/24
       AvailabilityZone:
         Fn::Select:
           - 0
           - Fn::GetAZs: ""
+  privsn1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc1
+      CidrBlock: 10.20.20.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+  pubsn2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc1
+      CidrBlock: 10.20.11.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+  privsn2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc1
+      CidrBlock: 10.20.21.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+  privsn3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc1
+      CidrBlock: 10.20.22.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 2
+          - Fn::GetAZs: ""
+  pubsn3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref vpc1
+      CidrBlock: 10.20.12.0/24
+      AvailabilityZone:
+        Fn::Select:
+          - 2
+          - Fn::GetAZs: ""
+  eip1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
   igw1:
     Type: AWS::EC2::InternetGateway
   VPC1GatewayAttachment:
@@ -27,26 +76,91 @@ Resources:
     Properties:
       VpcId: !Ref vpc1
       InternetGatewayId: !Ref igw1
+  ngw1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt eip1.AllocationId
+      SubnetId: !Ref pubsn1
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref vpc1
-  defroute:
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref vpc1
+  pubdefroute:
     Type: AWS::EC2::Route
     DependsOn: VPC1GatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref igw1
-  sn1RouteTableAssociation:
+  privdefroute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref ngw1
+  pubsn1RouteTableAssociation:
     Type:  AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref sn1
+      SubnetId: !Ref pubsn1
       RouteTableId: !Ref PublicRouteTable
-  sn1NetworkAclAssociation:
+  privsn1RouteTableAssociation:
+    Type:  AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref privsn1
+      RouteTableId: !Ref PrivateRouteTable
+  pubsn2RouteTableAssociation:
+    Type:  AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref pubsn2
+      RouteTableId: !Ref PublicRouteTable
+  privsn2RouteTableAssociation:
+    Type:  AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref privsn2
+      RouteTableId: !Ref PrivateRouteTable
+  pubsn3RouteTableAssociation:
+    Type:  AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref pubsn3
+      RouteTableId: !Ref PublicRouteTable
+  privsn3RouteTableAssociation:
+    Type:  AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref privsn3
+      RouteTableId: !Ref PrivateRouteTable
+  pubsn1NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
-      SubnetId: !Ref sn1
+      SubnetId: !Ref pubsn1
+      NetworkAclId: !GetAtt vpc1.DefaultNetworkAcl
+  privsn1NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref privsn1
+      NetworkAclId: !GetAtt vpc1.DefaultNetworkAcl
+  pubsn2NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref pubsn2
+      NetworkAclId: !GetAtt vpc1.DefaultNetworkAcl
+  privsn2NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref privsn2
+      NetworkAclId: !GetAtt vpc1.DefaultNetworkAcl
+  pubsn3NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref pubsn3
+      NetworkAclId: !GetAtt vpc1.DefaultNetworkAcl
+  privsn3NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref privsn3
       NetworkAclId: !GetAtt vpc1.DefaultNetworkAcl
   sgwebportsfromany:
     Type: AWS::EC2::SecurityGroup
@@ -86,11 +200,36 @@ Outputs:
     Value: !Ref vpc1
     Export:
       Name: !Sub "${AWS::StackName}-vpc1"
-  sn1:
-    Description: subnet1
-    Value: !Ref sn1
+  pubsn1:
+    Description: Public subnet 1
+    Value: !Ref pubsn1
     Export:
-      Name: !Sub "${AWS::StackName}-sn1"
+      Name: !Sub "${AWS::StackName}-pubsn1"
+  privsn1:
+    Description: Private subnet 1
+    Value: !Ref privsn1
+    Export:
+      Name: !Sub "${AWS::StackName}-privsn1"
+  pubsn2:
+    Description: Public subnet 2
+    Value: !Ref pubsn2
+    Export:
+      Name: !Sub "${AWS::StackName}-pubsn2"
+  privsn2:
+    Description: Private subnet 2
+    Value: !Ref privsn2
+    Export:
+      Name: !Sub "${AWS::StackName}-privsn2"
+  pubsn3:
+    Description: Public subnet 3
+    Value: !Ref pubsn3
+    Export:
+      Name: !Sub "${AWS::StackName}-pubsn3"
+  privsn3:
+    Description: Private subnet 3
+    Value: !Ref privsn3
+    Export:
+      Name: !Sub "${AWS::StackName}-privsn3"
   sgwebportsfromany:
     Description: The security group to use for public web servers
     Value: !GetAtt sgwebportsfromany.GroupId
