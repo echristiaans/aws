@@ -1,0 +1,398 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Ascode.nl AWS Instance Stack
+Parameters:
+  NetworkStackName:
+    Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group, that will be used in this stack
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: DefaultNetworkLayer
+Mappings:
+  RegionMap:
+    eu-central-1:
+      "centos73": "ami-2540f74a"
+      "windows2016": "ami-5b7ac534"
+      "ubuntu": "ami-7c412f13"
+Resources:
+  bastion1int:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: bastion1 NetworkInterface
+      SourceDestCheck: "true"
+      PrivateIpAddress: 10.20.10.10
+      SubnetId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-pubsn1"
+      GroupSet:
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsshfromhome"
+  bastion1:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      DisableApiTermination: "false"
+      ImageId:
+        Fn::FindInMap:
+          - "RegionMap"
+          - Ref: "AWS::Region"
+          - "ubuntu"
+      InstanceType: "t2.small"
+      KeyName: "AWSDeploy"
+      Monitoring: "false"
+      Tags:
+        - Key: "Name"
+          Value:  "ac-sec-t01"
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: "standard"
+          DeleteOnTermination: "true"
+          VolumeSize: "100"
+      NetworkInterfaces:
+      - DeviceIndex: 0
+        NetworkInterfaceId: !Ref bastion1int
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get upgrade -y
+          apt-get install -y git python
+          apt-get install -y software-properties-common
+          apt-add-repository -y ppa:ansible/ansible
+          apt-get update
+          apt-get install -y ansible
+          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
+          systemctl restart ssh
+  k8smaster1int:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: master1 NetworkInterface
+      SourceDestCheck: "true"
+      PrivateIpAddress: 10.20.20.10
+      SubnetId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-privsn1"
+      GroupSet:
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsshfrombastion"
+  k8smaster1:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      DisableApiTermination: "false"
+      ImageId:
+        Fn::FindInMap:
+          - "RegionMap"
+          - Ref: "AWS::Region"
+          - "ubuntu"
+      InstanceType: "t2.small"
+      KeyName: "AWSDeploy"
+      Monitoring: "false"
+      Tags:
+        - Key: "Name"
+          Value:  "ac-k8m-t01"
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: "standard"
+          DeleteOnTermination: "true"
+          VolumeSize: "100"
+      NetworkInterfaces:
+      - DeviceIndex: 0
+        NetworkInterfaceId: !Ref k8smaster1int
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y python
+          apt-get upgrade -y
+          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
+          systemctl restart ssh
+  k8sworker1int:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: worker1 NetworkInterface
+      SourceDestCheck: "true"
+      PrivateIpAddress: 10.20.20.20
+      SubnetId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-privsn1"
+      GroupSet:
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsshfrombastion"
+  k8sworker1:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      DisableApiTermination: "false"
+      ImageId:
+        Fn::FindInMap:
+          - "RegionMap"
+          - Ref: "AWS::Region"
+          - "ubuntu"
+      InstanceType: "t2.small"
+      KeyName: "AWSDeploy"
+      Monitoring: "false"
+      Tags:
+        - Key: "Name"
+          Value:  "ac-k8w-t01"
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: "standard"
+          DeleteOnTermination: "true"
+          VolumeSize: "100"
+      NetworkInterfaces:
+      - DeviceIndex: 0
+        NetworkInterfaceId: !Ref k8sworker1int
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y python
+          apt-get upgrade -y
+          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
+          systemctl restart ssh
+  k8smaster2int:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: master2 NetworkInterface
+      SourceDestCheck: "true"
+      PrivateIpAddress: 10.20.21.10
+      SubnetId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-privsn2"
+      GroupSet:
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsshfrombastion"
+  k8smaster2:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      DisableApiTermination: "false"
+      ImageId:
+        Fn::FindInMap:
+          - "RegionMap"
+          - Ref: "AWS::Region"
+          - "ubuntu"
+      InstanceType: "t2.small"
+      KeyName: "AWSDeploy"
+      Monitoring: "false"
+      Tags:
+        - Key: "Name"
+          Value:  "ac-k8m-t02"
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: "standard"
+          DeleteOnTermination: "true"
+          VolumeSize: "100"
+      NetworkInterfaces:
+      - DeviceIndex: 0
+        NetworkInterfaceId: !Ref k8smaster2int
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y python
+          apt-get upgrade -y
+          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
+          systemctl restart ssh
+  k8sworker2int:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: worker1 NetworkInterface
+      SourceDestCheck: "true"
+      PrivateIpAddress: 10.20.21.20
+      SubnetId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-privsn2"
+      GroupSet:
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsshfrombastion"
+  k8sworker2:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      DisableApiTermination: "false"
+      ImageId:
+        Fn::FindInMap:
+          - "RegionMap"
+          - Ref: "AWS::Region"
+          - "ubuntu"
+      InstanceType: "t2.small"
+      KeyName: "AWSDeploy"
+      Monitoring: "false"
+      Tags:
+        - Key: "Name"
+          Value:  "ac-k8w-t02"
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: "standard"
+          DeleteOnTermination: "true"
+          VolumeSize: "100"
+      NetworkInterfaces:
+      - DeviceIndex: 0
+        NetworkInterfaceId: !Ref k8sworker2int
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y python
+          apt-get upgrade -y
+          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
+          systemctl restart ssh
+  k8smaster3int:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: master3 NetworkInterface
+      SourceDestCheck: "true"
+      PrivateIpAddress: 10.20.22.10
+      SubnetId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-privsn3"
+      GroupSet:
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsshfrombastion"
+  k8smaster3:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 2
+          - Fn::GetAZs: ""
+      DisableApiTermination: "false"
+      ImageId:
+        Fn::FindInMap:
+          - "RegionMap"
+          - Ref: "AWS::Region"
+          - "ubuntu"
+      InstanceType: "t2.small"
+      KeyName: "AWSDeploy"
+      Monitoring: "false"
+      Tags:
+        - Key: "Name"
+          Value:  "ac-k8m-t03"
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: "standard"
+          DeleteOnTermination: "true"
+          VolumeSize: "100"
+      NetworkInterfaces:
+      - DeviceIndex: 0
+        NetworkInterfaceId: !Ref k8smaster3int
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y python
+          apt-get upgrade -y
+          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
+          systemctl restart ssh
+  k8sworker3int:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: worker3 NetworkInterface
+      SourceDestCheck: "true"
+      PrivateIpAddress: 10.20.22.20
+      SubnetId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-privsn3"
+      GroupSet:
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsshfrombastion"
+  k8sworker3:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 2
+          - Fn::GetAZs: ""
+      DisableApiTermination: "false"
+      ImageId:
+        Fn::FindInMap:
+          - "RegionMap"
+          - Ref: "AWS::Region"
+          - "ubuntu"
+      InstanceType: "t2.small"
+      KeyName: "AWSDeploy"
+      Monitoring: "false"
+      Tags:
+        - Key: "Name"
+          Value:  "ac-k8w-t03"
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: "standard"
+          DeleteOnTermination: "true"
+          VolumeSize: "100"
+      NetworkInterfaces:
+      - DeviceIndex: 0
+        NetworkInterfaceId: !Ref k8sworker3int
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y python
+          apt-get upgrade -y
+          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
+          systemctl restart ssh
+  apielb:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      Subnets:
+        - Ref: pubsn1
+        - Ref: pubsn2
+        - Ref: pubsn3
+      CrossZone: true
+      Instances:
+        - Ref: k8smaster1
+        - Ref: k8smaster2
+        - Ref: k8smaster3
+      Listeners:
+        - LoadBalancerPort: '6443'
+          InstancePort: '6443'
+          Protocol: HTTPS
+      SecurityGroups:
+        - Ref:
+            Fn::ImportValue:
+              !Sub "${NetworkStackName}-sgk8sfromhome"
+      HealthCheck:
+        Target: HTTPS:6443/version
+        HealthyThreshold: '3'
+        UnhealthyThreshold: '5'
+        Interval: '30'
+        Timeout: '5'
+  AssociateEIP4:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-eip4"
+      NetworkInterfaceId: !Ref bastion1int

@@ -69,6 +69,18 @@ Resources:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
+  eip2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  eip3:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  eip4:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
   igw1:
     Type: AWS::EC2::InternetGateway
   VPC1GatewayAttachment:
@@ -81,11 +93,29 @@ Resources:
     Properties:
       AllocationId: !GetAtt eip1.AllocationId
       SubnetId: !Ref pubsn1
+  ngw2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt eip2.AllocationId
+      SubnetId: !Ref pubsn2
+  ngw3:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt eip3.AllocationId
+      SubnetId: !Ref pubsn3
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref vpc1
   PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref vpc1
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref vpc1
+  PrivateRouteTable3:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref vpc1
@@ -102,6 +132,18 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref ngw1
+  privdefroute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref ngw2
+  privdefroute3:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref ngw3
   pubsn1RouteTableAssociation:
     Type:  AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -121,7 +163,7 @@ Resources:
     Type:  AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref privsn2
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTable2
   pubsn3RouteTableAssociation:
     Type:  AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -131,7 +173,7 @@ Resources:
     Type:  AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref privsn3
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTable3
   pubsn1NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
@@ -196,6 +238,26 @@ Resources:
           FromPort: "22"
           ToPort: "22"
           CidrIp: 217.100.96.50/32
+  sgsshfrombastion:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH Ingress from home IPs
+      VpcId: !Ref vpc1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: "22"
+          ToPort: "22"
+          CidrIp: 10.20.10.10/32
+  sgk8sfromhome:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable Kubernetes API Ports from trusted IPs
+      VpcId: !Ref vpc1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: "6443"
+          ToPort: "6443"
+          CidrIp: 10.20.10.10/32
   sgwithoutegress:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -210,6 +272,11 @@ Outputs:
     Value: !Ref vpc1
     Export:
       Name: !Sub "${AWS::StackName}-vpc1"
+  eip2ID:
+    Description: Elastic IP 4
+    Value: !GetAtt eip4.AllocationId
+    Export:
+      Name: !Sub "${AWS::StackName}-eip4"
   pubsn1:
     Description: Public subnet 1
     Value: !Ref pubsn1
@@ -255,3 +322,13 @@ Outputs:
     Value: !GetAtt sgsshfromhome.GroupId
     Export:
       Name: !Sub "${AWS::StackName}-sgsshfromhome"
+  sgsshfrombastion:
+    Description: The security group to use for SSH access from bastion
+    Value: !GetAtt sgsshfrombastion.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-sgsshfrombastion"
+  sgk8sfromhome:
+    Description: The security group to use for Kubernetes API access from home
+    Value: !GetAtt sgk8sfromhome.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-sgk8sfromhome"
