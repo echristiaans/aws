@@ -228,6 +228,16 @@ Resources:
         FromPort: "22"
         ToPort: "22"
         CidrIp: 0.0.0.0/0
+  sgsshfromaegon:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH Ingress from Aegon
+      VpcId: !Ref vpc1
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: "22"
+        ToPort: "22"
+        CidrIp: 198.39.100.45/32
   sgsshfromhome:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -266,13 +276,51 @@ Resources:
       SecurityGroupEgress:
       - IpProtocol: "-1"
         CidrIp: 127.0.0.1/32
+  sgk8sports:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows ports required for Kubernetes
+      VpcId: !Ref vpc1
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: "8080"
+        ToPort: "8080"
+        CidrIp: 10.20.0.0/16
+      - IpProtocol: tcp
+        FromPort: "2379"
+        ToPort: "2379"
+        CidrIp: 10.20.0.0/16
+      - IpProtocol: tcp
+        FromPort: "2380"
+        ToPort: "2380"
+        CidrIp: 10.20.0.0/16
+      - IpProtocol: tcp
+        FromPort: "6443"
+        ToPort: "6443"
+        CidrIp: 10.20.0.0/16
+      - IpProtocol: tcp
+        FromPort: "10250"
+        ToPort: "10250"
+        CidrIp: 10.20.0.0/16
+      - IpProtocol: tcp
+        FromPort: "30000"
+        ToPort: "32767"
+        CidrIp: 10.20.0.0/16
+  sginternalcomms:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows internal communication between Kubernetes nodes
+      VpcId: !Ref vpc1
+      SecurityGroupIngress:
+      - IpProtocol: "-1"
+        CidrIp: 10.20.0.0/16
 Outputs:
   vpc1ID:
     Description: VPC 1
     Value: !Ref vpc1
     Export:
       Name: !Sub "${AWS::StackName}-vpc1"
-  eip2ID:
+  eip4ID:
     Description: Elastic IP 4
     Value: !GetAtt eip4.AllocationId
     Export:
@@ -307,6 +355,21 @@ Outputs:
     Value: !Ref privsn3
     Export:
       Name: !Sub "${AWS::StackName}-privsn3"
+  privroutetable1:
+    Description: Prive Route Table 1
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub "${AWS::StackName}-privrt1"
+  privroutetable2:
+    Description: Prive Route Table 2
+    Value: !Ref PrivateRouteTable2
+    Export:
+      Name: !Sub "${AWS::StackName}-privrt2"
+  privroutetable3:
+    Description: Prive Route Table 3
+    Value: !Ref PrivateRouteTable3
+    Export:
+      Name: !Sub "${AWS::StackName}-privrt3"
   sgwebportsfromany:
     Description: The security group to use for public web servers
     Value: !GetAtt sgwebportsfromany.GroupId
@@ -327,8 +390,23 @@ Outputs:
     Value: !GetAtt sgsshfrombastion.GroupId
     Export:
       Name: !Sub "${AWS::StackName}-sgsshfrombastion"
+  sgsshfromaegon:
+    Description: The security group to use for SSH access from Aegon
+    Value: !GetAtt sgsshfromaegon.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-sgsshfromaegon"
   sgk8sfromhome:
     Description: The security group to use for Kubernetes API access from home
     Value: !GetAtt sgk8sfromhome.GroupId
     Export:
       Name: !Sub "${AWS::StackName}-sgk8sfromhome"
+  sgk8sports:
+    Description: The security group to use for Kubernetes ports between nodes
+    Value: !GetAtt sgk8sports.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-sgk8sports"
+  sginternalcomms:
+    Description: The security group to Allow internal communication between Kubernetes nodes
+    Value: !GetAtt sginternalcomms.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-sginternalcomms"

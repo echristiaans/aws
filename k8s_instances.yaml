@@ -28,6 +28,8 @@ Resources:
       GroupSet:
         - Fn::ImportValue:
             !Sub "${NetworkStackName}-sgsshfromhome"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsshfromaegon"
   bastion1:
     Type: AWS::EC2::Instance
     Properties:
@@ -69,6 +71,14 @@ Resources:
           apt-get install -y ansible
           echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
           systemctl restart ssh
+          echo "ac-sec-t01" > /etc/hostname
+          hostname ac-sec-t01
+          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
+          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
+          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
+          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
+          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
+          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8smaster1int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -81,6 +91,8 @@ Resources:
       GroupSet:
         - Fn::ImportValue:
             !Sub "${NetworkStackName}-sgsshfrombastion"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sginternalcomms"
   k8smaster1:
     Type: AWS::EC2::Instance
     Properties:
@@ -118,6 +130,14 @@ Resources:
           apt-get upgrade -y
           echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
           systemctl restart ssh
+          echo "ac-k8m-t01" > /etc/hostname
+          hostname ac-k8m-t01
+          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
+          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
+          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
+          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
+          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
+          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8sworker1int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -130,6 +150,8 @@ Resources:
       GroupSet:
         - Fn::ImportValue:
             !Sub "${NetworkStackName}-sgsshfrombastion"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sginternalcomms"
   k8sworker1:
     Type: AWS::EC2::Instance
     Properties:
@@ -167,6 +189,14 @@ Resources:
           apt-get upgrade -y
           echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
           systemctl restart ssh
+          echo "ac-k8w-t01" > /etc/hostname
+          hostname ac-k8w-t01
+          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
+          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
+          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
+          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
+          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
+          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8smaster2int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -179,6 +209,8 @@ Resources:
       GroupSet:
         - Fn::ImportValue:
             !Sub "${NetworkStackName}-sgsshfrombastion"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sginternalcomms"
   k8smaster2:
     Type: AWS::EC2::Instance
     Properties:
@@ -216,6 +248,14 @@ Resources:
           apt-get upgrade -y
           echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
           systemctl restart ssh
+          echo "ac-k8m-t02" > /etc/hostname
+          hostname ac-k8m-t02
+          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
+          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
+          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
+          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
+          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
+          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8sworker2int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -228,6 +268,8 @@ Resources:
       GroupSet:
         - Fn::ImportValue:
             !Sub "${NetworkStackName}-sgsshfrombastion"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sginternalcomms"
   k8sworker2:
     Type: AWS::EC2::Instance
     Properties:
@@ -265,6 +307,14 @@ Resources:
           apt-get upgrade -y
           echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
           systemctl restart ssh
+          echo "ac-k8w-t02" > /etc/hostname
+          hostname ac-k8w-t02
+          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
+          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
+          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
+          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
+          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
+          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8smaster3int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -277,6 +327,8 @@ Resources:
       GroupSet:
         - Fn::ImportValue:
             !Sub "${NetworkStackName}-sgsshfrombastion"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sginternalcomms"
   k8smaster3:
     Type: AWS::EC2::Instance
     Properties:
@@ -314,6 +366,14 @@ Resources:
           apt-get upgrade -y
           echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
           systemctl restart ssh
+          echo "ac-k8m-t03" > /etc/hostname
+          hostname ac-k8m-t03
+          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
+          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
+          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
+          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
+          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
+          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8sworker3int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -326,6 +386,8 @@ Resources:
       GroupSet:
         - Fn::ImportValue:
             !Sub "${NetworkStackName}-sgsshfrombastion"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sginternalcomms"
   k8sworker3:
     Type: AWS::EC2::Instance
     Properties:
@@ -363,13 +425,25 @@ Resources:
           apt-get upgrade -y
           echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
           systemctl restart ssh
+          echo "ac-k8w-t03" > /etc/hostname
+          hostname ac-k8w-t03
+          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
+          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
+          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
+          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
+          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
+          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   apielb:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
     Properties:
+      Scheme: internal
       Subnets:
-        - Ref: pubsn1
-        - Ref: pubsn2
-        - Ref: pubsn3
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-pubsn1"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-pubsn2"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-pubsn3"
       CrossZone: true
       Instances:
         - Ref: k8smaster1
@@ -378,13 +452,12 @@ Resources:
       Listeners:
         - LoadBalancerPort: '6443'
           InstancePort: '6443'
-          Protocol: HTTPS
+          Protocol: TCP
       SecurityGroups:
-        - Ref:
-            Fn::ImportValue:
-              !Sub "${NetworkStackName}-sgk8sfromhome"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgk8sports"
       HealthCheck:
-        Target: HTTPS:6443/version
+        Target: TCP:6443
         HealthyThreshold: '3'
         UnhealthyThreshold: '5'
         Interval: '30'
@@ -396,3 +469,27 @@ Resources:
         Fn::ImportValue:
           !Sub "${NetworkStackName}-eip4"
       NetworkInterfaceId: !Ref bastion1int
+  k8spodroute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Fn::ImportValue:
+            !Sub "${NetworkStackName}-privrt1"
+      DestinationCidrBlock: 10.200.3.0/24
+      InstanceId: !Ref k8sworker1
+  k8spodroute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Fn::ImportValue:
+            !Sub "${NetworkStackName}-privrt2"
+      DestinationCidrBlock: 10.200.4.0/24
+      InstanceId: !Ref k8sworker2
+  k8spodroute3:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Fn::ImportValue:
+            !Sub "${NetworkStackName}-privrt3"
+      DestinationCidrBlock: 10.200.5.0/24
+      InstanceId: !Ref k8sworker3
