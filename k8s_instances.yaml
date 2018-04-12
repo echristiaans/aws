@@ -32,7 +32,86 @@ Resources:
             !Sub "${NetworkStackName}-sgsshfromaegon"
   bastion1:
     Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          config1:
+            - "vars1"
+          default:
+            - ConfigSet: "config1"
+        "vars1":
+          fileconfig:
+            files:
+              /etc/cfn/cfn-hup.conf:
+                content: !Sub |
+                  [main]
+                  stack=${AWS::StackId}
+                  region=${AWS::Region}
+                  interval=1
+                mode: "000400"
+                owner: "root"
+                group: "root"
+              /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+                content: !Sub |
+                  [cfn-auto-reloader-hook]
+                  triggers=post.update
+                  path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                  action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource bastion1
+                  runas=root
+                mode: "000400"
+                owner: "root"
+                group: "root"
+              /var/awslogs/etc/awslogs.conf:
+                content: !Sub |
+                  [general]
+                  state_file = /var/awslogs/state/agent-state
+
+                  [/var/log/syslog]
+                  file = /var/log/syslog
+                  log_group_name = ${instanceloggroup2}
+                  log_stream_name = {instance_id}
+                  datetime_format = %b %d %H:%M:%S
+              /etc/hostname:
+                content: "ac-sec-t01"
+                owner: "root"
+                group: "root"
+                mode: "000644"
+              /etc/hosts:
+                content: !Sub |
+                    127.0.0.1 localhost as-sec-t01
+
+                    # The following lines are desirable for IPv6 capable hosts
+                    ::1 ip6-localhost ip6-loopback
+                    fe00::0 ip6-localnet
+                    ff00::0 ip6-mcastprefix
+                    ff02::1 ip6-allnodes
+                    ff02::2 ip6-allrouters
+                    ff02::3 ip6-allhosts
+                    10.20.20.10 ac-k8m-t01
+                    10.20.21.10 ac-k8m-t02
+                    10.20.22.10 ac-k8m-t03
+                    10.20.20.20 ac-k8w-t01
+                    10.20.21.20 ac-k8w-t02
+                    10.20.22.20 ac-k8w-t03
+                owner: "root"
+                group: "root"
+                mode: "000644"
+            commands:
+              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+                ignoreErrors: "true"
+            packages:
+              apt:
+                git: []
+                python: []
+                software-properties-common: []
+            services:
+              sysvinit:
+                cfn-hup:
+                  enabled: true
+                  ensureRunning: true
     Properties:
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile2
       AvailabilityZone:
         Fn::Select:
           - 0
@@ -63,22 +142,18 @@ Resources:
           #!/bin/bash -xe
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
+          apt-get install python-setuptools python-pip -y
+          easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          chmod +x /etc/init.d/cfn-hup
+          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource bastion1 --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+          wget https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/cwlogs/apacheaccess.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource bastion1 --region ${AWS::Region}
           apt-get upgrade -y
-          apt-get install -y git python
-          apt-get install -y software-properties-common
           apt-add-repository -y ppa:ansible/ansible
           apt-get update
           apt-get install -y ansible
-          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
-          systemctl restart ssh
-          echo "ac-sec-t01" > /etc/hostname
-          hostname ac-sec-t01
-          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
-          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
-          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
-          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
-          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
-          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8smaster1int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -95,6 +170,65 @@ Resources:
             !Sub "${NetworkStackName}-sginternalcomms"
   k8smaster1:
     Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          config1:
+            - "vars1"
+          default:
+            - ConfigSet: "config1"
+        "vars1":
+          fileconfig:
+            files:
+              /etc/cfn/cfn-hup.conf:
+                content: !Sub |
+                  [main]
+                  stack=${AWS::StackId}
+                  region=${AWS::Region}
+                  interval=1
+                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+                  content: !Sub |
+                    [cfn-auto-reloader-hook]
+                    triggers=post.update
+                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8smaster1
+                    runas=root
+              /etc/hostname:
+                content: "ac-k8m-t01"
+                owner: "root"
+                group: "root"
+                mode: "000644"
+              /etc/hosts:
+                content: !Sub |
+                    127.0.0.1 localhost as-k8m-t01
+
+                    # The following lines are desirable for IPv6 capable hosts
+                    ::1 ip6-localhost ip6-loopback
+                    fe00::0 ip6-localnet
+                    ff00::0 ip6-mcastprefix
+                    ff02::1 ip6-allnodes
+                    ff02::2 ip6-allrouters
+                    ff02::3 ip6-allhosts
+                    10.20.20.10 ac-k8m-t01
+                    10.20.21.10 ac-k8m-t02
+                    10.20.22.10 ac-k8m-t03
+                    10.20.20.20 ac-k8w-t01
+                    10.20.21.20 ac-k8w-t02
+                    10.20.22.20 ac-k8w-t03
+                owner: "root"
+                group: "root"
+                mode: "000644"
+            commands:
+              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+                ignoreErrors: "true"
+            packages:
+              apt:
+                python: []
+            services:
+              sysvinit:
+                cfn-hup:
+                  enabled: true
+                  ensureRunning: true
     Properties:
       AvailabilityZone:
         Fn::Select:
@@ -126,18 +260,13 @@ Resources:
           #!/bin/bash -xe
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y python
+          apt-get install python-setuptools python-pip -y
+          easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          chmod +x /etc/init.d/cfn-hup
+          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8smaster1 --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8smaster1 --region ${AWS::Region}
           apt-get upgrade -y
-          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
-          systemctl restart ssh
-          echo "ac-k8m-t01" > /etc/hostname
-          hostname ac-k8m-t01
-          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
-          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
-          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
-          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
-          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
-          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8sworker1int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -154,6 +283,65 @@ Resources:
             !Sub "${NetworkStackName}-sginternalcomms"
   k8sworker1:
     Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          config1:
+            - "vars1"
+          default:
+            - ConfigSet: "config1"
+        "vars1":
+          fileconfig:
+            files:
+              /etc/cfn/cfn-hup.conf:
+                content: !Sub |
+                  [main]
+                  stack=${AWS::StackId}
+                  region=${AWS::Region}
+                  interval=1
+                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+                  content: !Sub |
+                    [cfn-auto-reloader-hook]
+                    triggers=post.update
+                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8sworker1
+                    runas=root
+              /etc/hostname:
+                content: "ac-k8w-t01"
+                owner: "root"
+                group: "root"
+                mode: "000644"
+              /etc/hosts:
+                content: !Sub |
+                    127.0.0.1 localhost as-k8w-t01
+
+                    # The following lines are desirable for IPv6 capable hosts
+                    ::1 ip6-localhost ip6-loopback
+                    fe00::0 ip6-localnet
+                    ff00::0 ip6-mcastprefix
+                    ff02::1 ip6-allnodes
+                    ff02::2 ip6-allrouters
+                    ff02::3 ip6-allhosts
+                    10.20.20.10 ac-k8m-t01
+                    10.20.21.10 ac-k8m-t02
+                    10.20.22.10 ac-k8m-t03
+                    10.20.20.20 ac-k8w-t01
+                    10.20.21.20 ac-k8w-t02
+                    10.20.22.20 ac-k8w-t03
+                owner: "root"
+                group: "root"
+                mode: "000644"
+            commands:
+              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+                ignoreErrors: "true"
+            packages:
+              apt:
+                python: []
+            services:
+              sysvinit:
+                cfn-hup:
+                  enabled: true
+                  ensureRunning: true
     Properties:
       AvailabilityZone:
         Fn::Select:
@@ -185,18 +373,13 @@ Resources:
           #!/bin/bash -xe
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y python
+          apt-get install python-setuptools python-pip -y
+          easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          chmod +x /etc/init.d/cfn-hup
+          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8sworker1 --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8sworker1 --region ${AWS::Region}
           apt-get upgrade -y
-          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
-          systemctl restart ssh
-          echo "ac-k8w-t01" > /etc/hostname
-          hostname ac-k8w-t01
-          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
-          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
-          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
-          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
-          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
-          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8smaster2int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -213,6 +396,65 @@ Resources:
             !Sub "${NetworkStackName}-sginternalcomms"
   k8smaster2:
     Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          config1:
+            - "vars1"
+          default:
+            - ConfigSet: "config1"
+        "vars1":
+          fileconfig:
+            files:
+              /etc/cfn/cfn-hup.conf:
+                content: !Sub |
+                  [main]
+                  stack=${AWS::StackId}
+                  region=${AWS::Region}
+                  interval=1
+                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+                  content: !Sub |
+                    [cfn-auto-reloader-hook]
+                    triggers=post.update
+                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8smaster2
+                    runas=root
+                /etc/hostname:
+                  content: "ac-k8m-t02"
+                  owner: "root"
+                  group: "root"
+                  mode: "000644"
+                /etc/hosts:
+                  content: !Sub |
+                      127.0.0.1 localhost as-k8m-t02
+
+                      # The following lines are desirable for IPv6 capable hosts
+                      ::1 ip6-localhost ip6-loopback
+                      fe00::0 ip6-localnet
+                      ff00::0 ip6-mcastprefix
+                      ff02::1 ip6-allnodes
+                      ff02::2 ip6-allrouters
+                      ff02::3 ip6-allhosts
+                      10.20.20.10 ac-k8m-t01
+                      10.20.21.10 ac-k8m-t02
+                      10.20.22.10 ac-k8m-t03
+                      10.20.20.20 ac-k8w-t01
+                      10.20.21.20 ac-k8w-t02
+                      10.20.22.20 ac-k8w-t03
+                  owner: "root"
+                  group: "root"
+                  mode: "000644"
+            commands:
+              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+                ignoreErrors: "true"
+            packages:
+              apt:
+                python: []
+            services:
+              sysvinit:
+                cfn-hup:
+                  enabled: true
+                  ensureRunning: true
     Properties:
       AvailabilityZone:
         Fn::Select:
@@ -244,18 +486,13 @@ Resources:
           #!/bin/bash -xe
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y python
+          apt-get install python-setuptools python-pip -y
+          easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          chmod +x /etc/init.d/cfn-hup
+          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8smaster2 --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8smaster2 --region ${AWS::Region}
           apt-get upgrade -y
-          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
-          systemctl restart ssh
-          echo "ac-k8m-t02" > /etc/hostname
-          hostname ac-k8m-t02
-          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
-          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
-          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
-          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
-          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
-          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8sworker2int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -272,6 +509,65 @@ Resources:
             !Sub "${NetworkStackName}-sginternalcomms"
   k8sworker2:
     Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          config1:
+            - "vars1"
+          default:
+            - ConfigSet: "config1"
+        "vars1":
+          fileconfig:
+            files:
+              /etc/cfn/cfn-hup.conf:
+                content: !Sub |
+                  [main]
+                  stack=${AWS::StackId}
+                  region=${AWS::Region}
+                  interval=1
+                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+                  content: !Sub |
+                    [cfn-auto-reloader-hook]
+                    triggers=post.update
+                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8sworker2
+                    runas=root
+              /etc/hostname:
+                content: "ac-k8w-t02"
+                owner: "root"
+                group: "root"
+                mode: "000644"
+              /etc/hosts:
+                content: !Sub |
+                    127.0.0.1 localhost as-k8w-t02
+
+                    # The following lines are desirable for IPv6 capable hosts
+                    ::1 ip6-localhost ip6-loopback
+                    fe00::0 ip6-localnet
+                    ff00::0 ip6-mcastprefix
+                    ff02::1 ip6-allnodes
+                    ff02::2 ip6-allrouters
+                    ff02::3 ip6-allhosts
+                    10.20.20.10 ac-k8m-t01
+                    10.20.21.10 ac-k8m-t02
+                    10.20.22.10 ac-k8m-t03
+                    10.20.20.20 ac-k8w-t01
+                    10.20.21.20 ac-k8w-t02
+                    10.20.22.20 ac-k8w-t03
+                owner: "root"
+                group: "root"
+                mode: "000644"
+            commands:
+              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+                ignoreErrors: "true"
+            packages:
+              apt:
+                python: []
+            services:
+              sysvinit:
+                cfn-hup:
+                  enabled: true
+                  ensureRunning: true
     Properties:
       AvailabilityZone:
         Fn::Select:
@@ -303,18 +599,13 @@ Resources:
           #!/bin/bash -xe
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y python
+          apt-get install python-setuptools python-pip -y
+          easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          chmod +x /etc/init.d/cfn-hup
+          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8sworker2 --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8sworker2 --region ${AWS::Region}
           apt-get upgrade -y
-          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
-          systemctl restart ssh
-          echo "ac-k8w-t02" > /etc/hostname
-          hostname ac-k8w-t02
-          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
-          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
-          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
-          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
-          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
-          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8smaster3int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -331,6 +622,65 @@ Resources:
             !Sub "${NetworkStackName}-sginternalcomms"
   k8smaster3:
     Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          config1:
+            - "vars1"
+          default:
+            - ConfigSet: "config1"
+        "vars1":
+          fileconfig:
+            files:
+              /etc/cfn/cfn-hup.conf:
+                content: !Sub |
+                  [main]
+                  stack=${AWS::StackId}
+                  region=${AWS::Region}
+                  interval=1
+                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+                  content: !Sub |
+                    [cfn-auto-reloader-hook]
+                    triggers=post.update
+                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8smaster3
+                    runas=root
+              /etc/hostname:
+                content: "ac-k8m-t03"
+                owner: "root"
+                group: "root"
+                mode: "000644"
+              /etc/hosts:
+                content: !Sub |
+                    127.0.0.1 localhost as-k8m-t03
+
+                    # The following lines are desirable for IPv6 capable hosts
+                    ::1 ip6-localhost ip6-loopback
+                    fe00::0 ip6-localnet
+                    ff00::0 ip6-mcastprefix
+                    ff02::1 ip6-allnodes
+                    ff02::2 ip6-allrouters
+                    ff02::3 ip6-allhosts
+                    10.20.20.10 ac-k8m-t01
+                    10.20.21.10 ac-k8m-t02
+                    10.20.22.10 ac-k8m-t03
+                    10.20.20.20 ac-k8w-t01
+                    10.20.21.20 ac-k8w-t02
+                    10.20.22.20 ac-k8w-t03
+                owner: "root"
+                group: "root"
+                mode: "000644"
+            commands:
+              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+                ignoreErrors: "true"
+            packages:
+              apt:
+                python: []
+            services:
+              sysvinit:
+                cfn-hup:
+                  enabled: true
+                  ensureRunning: true
     Properties:
       AvailabilityZone:
         Fn::Select:
@@ -362,18 +712,13 @@ Resources:
           #!/bin/bash -xe
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y python
+          apt-get install python-setuptools python-pip -y
+          easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          chmod +x /etc/init.d/cfn-hup
+          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8smaster3 --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8smaster3 --region ${AWS::Region}
           apt-get upgrade -y
-          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
-          systemctl restart ssh
-          echo "ac-k8m-t03" > /etc/hostname
-          hostname ac-k8m-t03
-          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
-          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
-          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
-          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
-          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
-          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   k8sworker3int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -390,6 +735,65 @@ Resources:
             !Sub "${NetworkStackName}-sginternalcomms"
   k8sworker3:
     Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          config1:
+            - "vars1"
+          default:
+            - ConfigSet: "config1"
+        "vars1":
+          fileconfig:
+            files:
+              /etc/cfn/cfn-hup.conf:
+                content: !Sub |
+                  [main]
+                  stack=${AWS::StackId}
+                  region=${AWS::Region}
+                  interval=1
+                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+                  content: !Sub |
+                    [cfn-auto-reloader-hook]
+                    triggers=post.update
+                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8sworker3
+                    runas=root
+              /etc/hostname:
+                content: "ac-k8w-t03"
+                owner: "root"
+                group: "root"
+                mode: "000644"
+              /etc/hosts:
+                content: !Sub |
+                    127.0.0.1 localhost as-k8w-t03
+
+                    # The following lines are desirable for IPv6 capable hosts
+                    ::1 ip6-localhost ip6-loopback
+                    fe00::0 ip6-localnet
+                    ff00::0 ip6-mcastprefix
+                    ff02::1 ip6-allnodes
+                    ff02::2 ip6-allrouters
+                    ff02::3 ip6-allhosts
+                    10.20.20.10 ac-k8m-t01
+                    10.20.21.10 ac-k8m-t02
+                    10.20.22.10 ac-k8m-t03
+                    10.20.20.20 ac-k8w-t01
+                    10.20.21.20 ac-k8w-t02
+                    10.20.22.20 ac-k8w-t03
+                owner: "root"
+                group: "root"
+                mode: "000644"
+            commands:
+              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+                ignoreErrors: "true"
+            packages:
+              apt:
+                python: []
+            services:
+              sysvinit:
+                cfn-hup:
+                  enabled: true
+                  ensureRunning: true
     Properties:
       AvailabilityZone:
         Fn::Select:
@@ -421,18 +825,13 @@ Resources:
           #!/bin/bash -xe
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y python
+          apt-get install python-setuptools python-pip -y
+          easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          chmod +x /etc/init.d/cfn-hup
+          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8sworker3 --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8sworker3 --region ${AWS::Region}
           apt-get upgrade -y
-          echo "AllowAgentForwarding yes" >> /etc/ssh/sshd_config
-          systemctl restart ssh
-          echo "ac-k8w-t03" > /etc/hostname
-          hostname ac-k8w-t03
-          echo "10.20.20.10 ac-k8m-t01" >> /etc/hosts
-          echo "10.20.21.10 ac-k8m-t02" >> /etc/hosts
-          echo "10.20.22.10 ac-k8m-t03" >> /etc/hosts
-          echo "10.20.20.20 ac-k8w-t01" >> /etc/hosts
-          echo "10.20.21.20 ac-k8w-t02" >> /etc/hosts
-          echo "10.20.22.20 ac-k8w-t03" >> /etc/hosts
   apielb:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
     Properties:
@@ -493,3 +892,45 @@ Resources:
             !Sub "${NetworkStackName}-privrt3"
       DestinationCidrBlock: 10.200.5.0/24
       InstanceId: !Ref k8sworker3
+  instanceloggroup2:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+  InstanceLogRole2:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: InstanceLogRole2
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: InstanceLogRolePolicy2
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:PutLogEvents
+            - logs:DescribeLogStreams
+            - logs:CreateLogStream
+            Resource:
+            - arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            Resource:
+            - arn:aws:s3:::*
+  LogRoleInstanceProfile2:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref InstanceLogRole2

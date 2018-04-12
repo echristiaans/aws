@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Ascode.nl AWS Logging Stack
+Resources:
+  cloudtrailbucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: ascode-cloudtraillogs
+    DeletionPolicy: Retain
+  cloudtrailbucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Id: cloudtrailbucketPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub |-
+              arn:aws:s3:::${cloudtrailbucket}
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service:
+                - cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub |-
+              arn:aws:s3:::${cloudtrailbucket}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: "bucket-owner-full-control"
+      Bucket: !Ref cloudtrailbucket
+  cloudtrailloggroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+  CloudTrailLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CloudTrailLogRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - cloudtrail.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: CloudTrailLogRolePolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource:
+            - arn:aws:logs:*:*:*
+  cloudtrailtrail:
+    DependsOn:
+      - cloudtrailbucketPolicy
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      CloudWatchLogsLogGroupArn: !GetAtt [cloudtrailloggroup, Arn]
+      CloudWatchLogsRoleArn: !GetAtt [CloudTrailLogRole, Arn]
+      EnableLogFileValidation: true
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      S3BucketName: !Ref cloudtrailbucket
+      TrailName: ascode.nl-cloudtrail

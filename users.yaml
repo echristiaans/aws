@@ -2,31 +2,31 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Ascode.nl IAM User Stack
 Resources:
+  admingroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Gods
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
+        - "arn:aws:iam::aws:policy/AWSCloudTrailFullAccess"
   echristiaans:
     Type: AWS::IAM::User
     Properties:
+      Groups:
+        - !Ref admingroup
       Path: "/"
       LoginProfile:
         Password: myP@ssW0rd
-      Policies:
-      - PolicyName: giveaccesstoqueueonly
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - sqs:*
-            Resource:
-            - !GetAtt myqueue.Arn
-          - Effect: Deny
-            Action:
-            - sqs:*
-            NotResource:
-            - !GetAtt myqueue.Arn
-   myaccesskey:
-     Type: AWS::IAM::AccessKey
-     Properties:
-       UserName: !Ref echristiaans
+  echristiaansaccesskey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref echristiaans
+  AccessKeyformyaccesskey:
+  Value:
+    !Ref echristiaansaccesskey
+  SecretKeyformyaccesskey:
+    Value: !GetAtt echristiaansaccesskey.SecretAccessKey
+
 Outputs:
   userechristiaans:
     Description: Erik Christiaans IAM User Name
