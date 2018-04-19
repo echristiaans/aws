@@ -1,0 +1,11 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Ascode.nl AWS KOPS Cluster Stack
+Resources:
+  kopsstatebucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: ascode-kops-cluster-state
+      VersioningConfiguration:
+        Status: Enabled
+    DeletionPolicy: Retain

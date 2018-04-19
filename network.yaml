@@ -248,6 +248,16 @@ Resources:
           FromPort: "22"
           ToPort: "22"
           CidrIp: 217.100.96.50/32
+  sgsshfromdept:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH Ingress from DEPT IP
+      VpcId: !Ref vpc1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: "22"
+          ToPort: "22"
+          CidrIp: 89.20.163.70/32
   sgsshfrombastion:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -396,10 +406,15 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-sgsshfromaegon"
   sgk8sfromhome:
-    Description: The security group to use for Kubernetes API access from home
+    Description: The security group to use for SSH access from home
     Value: !GetAtt sgk8sfromhome.GroupId
     Export:
       Name: !Sub "${AWS::StackName}-sgk8sfromhome"
+  sgk8sfromdept:
+    Description: The security group to use for SSH access from Dept
+    Value: !GetAtt sgsshfromdept.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-sgsshfromdept"
   sgk8sports:
     Description: The security group to use for Kubernetes ports between nodes
     Value: !GetAtt sgk8sports.GroupId

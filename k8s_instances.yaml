@@ -15,6 +15,8 @@ Mappings:
       "centos73": "ami-2540f74a"
       "windows2016": "ami-5b7ac534"
       "ubuntu": "ami-7c412f13"
+    eu-west-1:
+      "ubuntu": ""
 Resources:
   bastion1int:
     Type: AWS::EC2::NetworkInterface
@@ -30,85 +32,104 @@ Resources:
             !Sub "${NetworkStackName}-sgsshfromhome"
         - Fn::ImportValue:
             !Sub "${NetworkStackName}-sgsshfromaegon"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsshfromdept"
   bastion1:
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
-        configSets:
-          config1:
-            - "vars1"
-          default:
-            - ConfigSet: "config1"
-        "vars1":
-          fileconfig:
-            files:
-              /etc/cfn/cfn-hup.conf:
-                content: !Sub |
-                  [main]
-                  stack=${AWS::StackId}
-                  region=${AWS::Region}
-                  interval=1
-                mode: "000400"
-                owner: "root"
-                group: "root"
-              /etc/cfn/hooks.d/cfn-auto-reloader.conf:
-                content: !Sub |
-                  [cfn-auto-reloader-hook]
-                  triggers=post.update
-                  path=Resources.Server.Metadata.AWS::CloudFormation::Init
-                  action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource bastion1
-                  runas=root
-                mode: "000400"
-                owner: "root"
-                group: "root"
-              /var/awslogs/etc/awslogs.conf:
-                content: !Sub |
-                  [general]
-                  state_file = /var/awslogs/state/agent-state
+        config:
+          packages:
+            apt:
+              git: []
+              python: []
+              software-properties-common: []
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource bastion1
+                runas=root
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /tmp/aws-logs.conf:
+              content: !Sub |
+                [general]
+                state_file = /var/awslogs/state/agent-state
 
-                  [/var/log/syslog]
-                  file = /var/log/syslog
-                  log_group_name = ${instanceloggroup2}
-                  log_stream_name = {instance_id}
-                  datetime_format = %b %d %H:%M:%S
-              /etc/hostname:
-                content: "ac-sec-t01"
-                owner: "root"
-                group: "root"
-                mode: "000644"
-              /etc/hosts:
-                content: !Sub |
-                    127.0.0.1 localhost as-sec-t01
+                [/var/log/syslog]
+                file = /var/log/syslog
+                log_group_name = ${instanceloggroup2}
+                log_stream_name = {hostname}/syslog
+                datetime_format = %b %d %H:%M:%S
+            /etc/hostname:
+              content: "ac-sec-t01"
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/hosts:
+              content: !Sub |
+                127.0.0.1 localhost as-sec-t01
 
-                    # The following lines are desirable for IPv6 capable hosts
-                    ::1 ip6-localhost ip6-loopback
-                    fe00::0 ip6-localnet
-                    ff00::0 ip6-mcastprefix
-                    ff02::1 ip6-allnodes
-                    ff02::2 ip6-allrouters
-                    ff02::3 ip6-allhosts
-                    10.20.20.10 ac-k8m-t01
-                    10.20.21.10 ac-k8m-t02
-                    10.20.22.10 ac-k8m-t03
-                    10.20.20.20 ac-k8w-t01
-                    10.20.21.20 ac-k8w-t02
-                    10.20.22.20 ac-k8w-t03
-                owner: "root"
-                group: "root"
-                mode: "000644"
-            commands:
-              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
-                ignoreErrors: "true"
-            packages:
-              apt:
-                git: []
-                python: []
-                software-properties-common: []
-            services:
-              sysvinit:
-                cfn-hup:
-                  enabled: true
-                  ensureRunning: true
+                # The following lines are desirable for IPv6 capable hosts
+                ::1 ip6-localhost ip6-loopback
+                fe00::0 ip6-localnet
+                ff00::0 ip6-mcastprefix
+                ff02::1 ip6-allnodes
+                ff02::2 ip6-allrouters
+                ff02::3 ip6-allhosts
+                10.20.20.10 ac-k8m-t01
+                10.20.21.10 ac-k8m-t02
+                10.20.22.10 ac-k8m-t03
+                10.20.20.20 ac-k8w-t01
+                10.20.21.20 ac-k8w-t02
+                10.20.22.20 ac-k8w-t03
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/systemd/system/awslogs.service:
+              content: !Sub |
+                [Unit]
+                Description=Service for CloudWatch Logs agent
+                After=rc-local.service
+
+                [Service]
+                Type=simple
+                Restart=always
+                KillMode=process
+                TimeoutSec=infinity
+                PIDFile=/var/awslogs/state/awslogs.pid
+                ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh --start --background --pidfile $PIDFILE --user awslogs --chuid awslogs &amp;
+
+                [Install]
+                WantedBy=multi-user.target
+              owner: "root"
+              group: "root"
+              mode: "000644"
+          commands:
+            sshforwarding:
+              command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+              ignoreErrors: "true"
+            settimezone:
+              command: "timedatectl set-timezone Europe/Amsterdam"
+              ignoreErrors: "true"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
     Properties:
       IamInstanceProfile:
         Ref: LogRoleInstanceProfile2
@@ -143,17 +164,21 @@ Resources:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install python-setuptools python-pip -y
+          hostname ac-sec-t01
           easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          ln -s /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
           chmod +x /etc/init.d/cfn-hup
-          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource bastion1 --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+          sed -i 's/DAEMON=\/usr\/local\/bin\/cfn-hup/DAEMON=\/opt\/aws\/bin\/cfn-hup/g' /etc/init.d/cfn-hup
+          update-rc.d cfn-hup defaults
+          /opt/aws/bin/cfn-init -s ${AWS::StackId} --resource bastion1 --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
           wget https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
-          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/cwlogs/apacheaccess.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
-          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource bastion1 --region ${AWS::Region}
+          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/aws-logs.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
+          systemctl start awslogs.service && systemctl enable awslogs.service || error_exit 'Failed to start CloudWatch Logs agent'
           apt-get upgrade -y
           apt-add-repository -y ppa:ansible/ansible
           apt-get update
           apt-get install -y ansible
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource bastion1 --region ${AWS::Region}
   k8smaster1int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -172,64 +197,99 @@ Resources:
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
-        configSets:
-          config1:
-            - "vars1"
-          default:
-            - ConfigSet: "config1"
-        "vars1":
-          fileconfig:
-            files:
-              /etc/cfn/cfn-hup.conf:
-                content: !Sub |
-                  [main]
-                  stack=${AWS::StackId}
-                  region=${AWS::Region}
-                  interval=1
-                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
-                  content: !Sub |
-                    [cfn-auto-reloader-hook]
-                    triggers=post.update
-                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
-                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8smaster1
-                    runas=root
-              /etc/hostname:
-                content: "ac-k8m-t01"
-                owner: "root"
-                group: "root"
-                mode: "000644"
-              /etc/hosts:
-                content: !Sub |
-                    127.0.0.1 localhost as-k8m-t01
+        config:
+          packages:
+            apt:
+              python: []
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8smaster1
+                runas=root
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /tmp/aws-logs.conf:
+              content: !Sub |
+                [general]
+                state_file = /var/awslogs/state/agent-state
 
-                    # The following lines are desirable for IPv6 capable hosts
-                    ::1 ip6-localhost ip6-loopback
-                    fe00::0 ip6-localnet
-                    ff00::0 ip6-mcastprefix
-                    ff02::1 ip6-allnodes
-                    ff02::2 ip6-allrouters
-                    ff02::3 ip6-allhosts
-                    10.20.20.10 ac-k8m-t01
-                    10.20.21.10 ac-k8m-t02
-                    10.20.22.10 ac-k8m-t03
-                    10.20.20.20 ac-k8w-t01
-                    10.20.21.20 ac-k8w-t02
-                    10.20.22.20 ac-k8w-t03
-                owner: "root"
-                group: "root"
-                mode: "000644"
-            commands:
-              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
-                ignoreErrors: "true"
-            packages:
-              apt:
-                python: []
-            services:
-              sysvinit:
-                cfn-hup:
-                  enabled: true
-                  ensureRunning: true
+                [/var/log/syslog]
+                file = /var/log/syslog
+                log_group_name = ${instanceloggroup2}
+                log_stream_name = {hostname}/syslog
+                datetime_format = %b %d %H:%M:%S
+            /etc/hostname:
+              content: "ac-k8m-t01"
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/hosts:
+              content: !Sub |
+                127.0.0.1 localhost ac-k8m-t01
+
+                # The following lines are desirable for IPv6 capable hosts
+                ::1 ip6-localhost ip6-loopback
+                fe00::0 ip6-localnet
+                ff00::0 ip6-mcastprefix
+                ff02::1 ip6-allnodes
+                ff02::2 ip6-allrouters
+                ff02::3 ip6-allhosts
+                10.20.20.10 ac-k8m-t01
+                10.20.21.10 ac-k8m-t02
+                10.20.22.10 ac-k8m-t03
+                10.20.20.20 ac-k8w-t01
+                10.20.21.20 ac-k8w-t02
+                10.20.22.20 ac-k8w-t03
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/systemd/system/awslogs.service:
+              content: !Sub |
+                [Unit]
+                Description=Service for CloudWatch Logs agent
+                After=rc-local.service
+
+                [Service]
+                Type=simple
+                Restart=always
+                KillMode=process
+                TimeoutSec=infinity
+                PIDFile=/var/awslogs/state/awslogs.pid
+                ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh --start --background --pidfile $PIDFILE --user awslogs --chuid awslogs &amp;
+
+                [Install]
+                WantedBy=multi-user.target
+              owner: "root"
+              group: "root"
+              mode: "000644"
+          commands:
+            sshforwarding:
+              command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+              ignoreErrors: "true"
+            settimezone:
+              command: "timedatectl set-timezone Europe/Amsterdam"
+              ignoreErrors: "true"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
     Properties:
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile2
       AvailabilityZone:
         Fn::Select:
           - 0
@@ -261,12 +321,18 @@ Resources:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install python-setuptools python-pip -y
+          hostname ac-k8m-t01
           easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          ln -s /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
           chmod +x /etc/init.d/cfn-hup
-          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8smaster1 --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8smaster1 --region ${AWS::Region}
+          sed -i 's/DAEMON=\/usr\/local\/bin\/cfn-hup/DAEMON=\/opt\/aws\/bin\/cfn-hup/g' /etc/init.d/cfn-hup
+          update-rc.d cfn-hup defaults
+          /opt/aws/bin/cfn-init -s ${AWS::StackId} --resource k8smaster1 --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+          wget https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/aws-logs.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
+          systemctl start awslogs.service && systemctl enable awslogs.service || error_exit 'Failed to start CloudWatch Logs agent'
           apt-get upgrade -y
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8smaster1 --region ${AWS::Region}
   k8sworker1int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -285,64 +351,99 @@ Resources:
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
-        configSets:
-          config1:
-            - "vars1"
-          default:
-            - ConfigSet: "config1"
-        "vars1":
-          fileconfig:
-            files:
-              /etc/cfn/cfn-hup.conf:
-                content: !Sub |
-                  [main]
-                  stack=${AWS::StackId}
-                  region=${AWS::Region}
-                  interval=1
-                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
-                  content: !Sub |
-                    [cfn-auto-reloader-hook]
-                    triggers=post.update
-                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
-                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8sworker1
-                    runas=root
-              /etc/hostname:
-                content: "ac-k8w-t01"
-                owner: "root"
-                group: "root"
-                mode: "000644"
-              /etc/hosts:
-                content: !Sub |
-                    127.0.0.1 localhost as-k8w-t01
+        config:
+          packages:
+            apt:
+              python: []
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8sworker1
+                runas=root
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /tmp/aws-logs.conf:
+              content: !Sub |
+                [general]
+                state_file = /var/awslogs/state/agent-state
 
-                    # The following lines are desirable for IPv6 capable hosts
-                    ::1 ip6-localhost ip6-loopback
-                    fe00::0 ip6-localnet
-                    ff00::0 ip6-mcastprefix
-                    ff02::1 ip6-allnodes
-                    ff02::2 ip6-allrouters
-                    ff02::3 ip6-allhosts
-                    10.20.20.10 ac-k8m-t01
-                    10.20.21.10 ac-k8m-t02
-                    10.20.22.10 ac-k8m-t03
-                    10.20.20.20 ac-k8w-t01
-                    10.20.21.20 ac-k8w-t02
-                    10.20.22.20 ac-k8w-t03
-                owner: "root"
-                group: "root"
-                mode: "000644"
-            commands:
-              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
-                ignoreErrors: "true"
-            packages:
-              apt:
-                python: []
-            services:
-              sysvinit:
-                cfn-hup:
-                  enabled: true
-                  ensureRunning: true
+                [/var/log/syslog]
+                file = /var/log/syslog
+                log_group_name = ${instanceloggroup2}
+                log_stream_name = {hostname}/syslog
+                datetime_format = %b %d %H:%M:%S
+            /etc/hostname:
+              content: "ac-k8w-t01"
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/hosts:
+              content: !Sub |
+                127.0.0.1 localhost ac-k8w-t01
+
+                # The following lines are desirable for IPv6 capable hosts
+                ::1 ip6-localhost ip6-loopback
+                fe00::0 ip6-localnet
+                ff00::0 ip6-mcastprefix
+                ff02::1 ip6-allnodes
+                ff02::2 ip6-allrouters
+                ff02::3 ip6-allhosts
+                10.20.20.10 ac-k8m-t01
+                10.20.21.10 ac-k8m-t02
+                10.20.22.10 ac-k8m-t03
+                10.20.20.20 ac-k8w-t01
+                10.20.21.20 ac-k8w-t02
+                10.20.22.20 ac-k8w-t03
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/systemd/system/awslogs.service:
+              content: !Sub |
+                [Unit]
+                Description=Service for CloudWatch Logs agent
+                After=rc-local.service
+
+                [Service]
+                Type=simple
+                Restart=always
+                KillMode=process
+                TimeoutSec=infinity
+                PIDFile=/var/awslogs/state/awslogs.pid
+                ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh --start --background --pidfile $PIDFILE --user awslogs --chuid awslogs &amp;
+
+                [Install]
+                WantedBy=multi-user.target
+              owner: "root"
+              group: "root"
+              mode: "000644"
+          commands:
+            sshforwarding:
+              command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+              ignoreErrors: "true"
+            settimezone:
+              command: "timedatectl set-timezone Europe/Amsterdam"
+              ignoreErrors: "true"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
     Properties:
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile2
       AvailabilityZone:
         Fn::Select:
           - 0
@@ -374,12 +475,18 @@ Resources:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install python-setuptools python-pip -y
+          hostname ac-k8w-t01
           easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          ln -s /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
           chmod +x /etc/init.d/cfn-hup
-          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8sworker1 --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8sworker1 --region ${AWS::Region}
+          sed -i 's/DAEMON=\/usr\/local\/bin\/cfn-hup/DAEMON=\/opt\/aws\/bin\/cfn-hup/g' /etc/init.d/cfn-hup
+          update-rc.d cfn-hup defaults
+          /opt/aws/bin/cfn-init -s ${AWS::StackId} --resource k8sworker1 --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+          wget https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/aws-logs.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
+          systemctl start awslogs.service && systemctl enable awslogs.service || error_exit 'Failed to start CloudWatch Logs agent'
           apt-get upgrade -y
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8sworker1 --region ${AWS::Region}
   k8smaster2int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -398,64 +505,99 @@ Resources:
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
-        configSets:
-          config1:
-            - "vars1"
-          default:
-            - ConfigSet: "config1"
-        "vars1":
-          fileconfig:
-            files:
-              /etc/cfn/cfn-hup.conf:
-                content: !Sub |
-                  [main]
-                  stack=${AWS::StackId}
-                  region=${AWS::Region}
-                  interval=1
-                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
-                  content: !Sub |
-                    [cfn-auto-reloader-hook]
-                    triggers=post.update
-                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
-                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8smaster2
-                    runas=root
-                /etc/hostname:
-                  content: "ac-k8m-t02"
-                  owner: "root"
-                  group: "root"
-                  mode: "000644"
-                /etc/hosts:
-                  content: !Sub |
-                      127.0.0.1 localhost as-k8m-t02
+        config:
+          packages:
+            apt:
+              python: []
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8smaster2
+                runas=root
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /tmp/aws-logs.conf:
+              content: !Sub |
+                [general]
+                state_file = /var/awslogs/state/agent-state
 
-                      # The following lines are desirable for IPv6 capable hosts
-                      ::1 ip6-localhost ip6-loopback
-                      fe00::0 ip6-localnet
-                      ff00::0 ip6-mcastprefix
-                      ff02::1 ip6-allnodes
-                      ff02::2 ip6-allrouters
-                      ff02::3 ip6-allhosts
-                      10.20.20.10 ac-k8m-t01
-                      10.20.21.10 ac-k8m-t02
-                      10.20.22.10 ac-k8m-t03
-                      10.20.20.20 ac-k8w-t01
-                      10.20.21.20 ac-k8w-t02
-                      10.20.22.20 ac-k8w-t03
-                  owner: "root"
-                  group: "root"
-                  mode: "000644"
-            commands:
-              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
-                ignoreErrors: "true"
-            packages:
-              apt:
-                python: []
-            services:
-              sysvinit:
-                cfn-hup:
-                  enabled: true
-                  ensureRunning: true
+                [/var/log/syslog]
+                file = /var/log/syslog
+                log_group_name = ${instanceloggroup2}
+                log_stream_name = {hostname}/syslog
+                datetime_format = %b %d %H:%M:%S
+            /etc/hostname:
+              content: "ac-k8m-t02"
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/hosts:
+              content: !Sub |
+                127.0.0.1 localhost ac-k8m-t02
+
+                # The following lines are desirable for IPv6 capable hosts
+                ::1 ip6-localhost ip6-loopback
+                fe00::0 ip6-localnet
+                ff00::0 ip6-mcastprefix
+                ff02::1 ip6-allnodes
+                ff02::2 ip6-allrouters
+                ff02::3 ip6-allhosts
+                10.20.20.10 ac-k8m-t01
+                10.20.21.10 ac-k8m-t02
+                10.20.22.10 ac-k8m-t03
+                10.20.20.20 ac-k8w-t01
+                10.20.21.20 ac-k8w-t02
+                10.20.22.20 ac-k8w-t03
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/systemd/system/awslogs.service:
+              content: !Sub |
+                [Unit]
+                Description=Service for CloudWatch Logs agent
+                After=rc-local.service
+
+                [Service]
+                Type=simple
+                Restart=always
+                KillMode=process
+                TimeoutSec=infinity
+                PIDFile=/var/awslogs/state/awslogs.pid
+                ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh --start --background --pidfile $PIDFILE --user awslogs --chuid awslogs &amp;
+
+                [Install]
+                WantedBy=multi-user.target
+              owner: "root"
+              group: "root"
+              mode: "000644"
+          commands:
+            sshforwarding:
+              command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+              ignoreErrors: "true"
+            settimezone:
+              command: "timedatectl set-timezone Europe/Amsterdam"
+              ignoreErrors: "true"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
     Properties:
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile2
       AvailabilityZone:
         Fn::Select:
           - 1
@@ -487,12 +629,18 @@ Resources:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install python-setuptools python-pip -y
+          hostname ac-k8m-t02
           easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          ln -s /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
           chmod +x /etc/init.d/cfn-hup
-          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8smaster2 --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8smaster2 --region ${AWS::Region}
+          sed -i 's/DAEMON=\/usr\/local\/bin\/cfn-hup/DAEMON=\/opt\/aws\/bin\/cfn-hup/g' /etc/init.d/cfn-hup
+          update-rc.d cfn-hup defaults
+          /opt/aws/bin/cfn-init -s ${AWS::StackId} --resource k8smaster2 --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+          wget https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/aws-logs.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
+          systemctl start awslogs.service && systemctl enable awslogs.service || error_exit 'Failed to start CloudWatch Logs agent'
           apt-get upgrade -y
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8smaster2 --region ${AWS::Region}
   k8sworker2int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -511,64 +659,99 @@ Resources:
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
-        configSets:
-          config1:
-            - "vars1"
-          default:
-            - ConfigSet: "config1"
-        "vars1":
-          fileconfig:
-            files:
-              /etc/cfn/cfn-hup.conf:
-                content: !Sub |
-                  [main]
-                  stack=${AWS::StackId}
-                  region=${AWS::Region}
-                  interval=1
-                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
-                  content: !Sub |
-                    [cfn-auto-reloader-hook]
-                    triggers=post.update
-                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
-                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8sworker2
-                    runas=root
-              /etc/hostname:
-                content: "ac-k8w-t02"
-                owner: "root"
-                group: "root"
-                mode: "000644"
-              /etc/hosts:
-                content: !Sub |
-                    127.0.0.1 localhost as-k8w-t02
+        config:
+          packages:
+            apt:
+              python: []
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8sworker2
+                runas=root
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /tmp/aws-logs.conf:
+              content: !Sub |
+                [general]
+                state_file = /var/awslogs/state/agent-state
 
-                    # The following lines are desirable for IPv6 capable hosts
-                    ::1 ip6-localhost ip6-loopback
-                    fe00::0 ip6-localnet
-                    ff00::0 ip6-mcastprefix
-                    ff02::1 ip6-allnodes
-                    ff02::2 ip6-allrouters
-                    ff02::3 ip6-allhosts
-                    10.20.20.10 ac-k8m-t01
-                    10.20.21.10 ac-k8m-t02
-                    10.20.22.10 ac-k8m-t03
-                    10.20.20.20 ac-k8w-t01
-                    10.20.21.20 ac-k8w-t02
-                    10.20.22.20 ac-k8w-t03
-                owner: "root"
-                group: "root"
-                mode: "000644"
-            commands:
-              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
-                ignoreErrors: "true"
-            packages:
-              apt:
-                python: []
-            services:
-              sysvinit:
-                cfn-hup:
-                  enabled: true
-                  ensureRunning: true
+                [/var/log/syslog]
+                file = /var/log/syslog
+                log_group_name = ${instanceloggroup2}
+                log_stream_name = {hostname}/syslog
+                datetime_format = %b %d %H:%M:%S
+            /etc/hostname:
+              content: "ac-k8w-t02"
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/hosts:
+              content: !Sub |
+                127.0.0.1 localhost ac-k8w-t02
+
+                # The following lines are desirable for IPv6 capable hosts
+                ::1 ip6-localhost ip6-loopback
+                fe00::0 ip6-localnet
+                ff00::0 ip6-mcastprefix
+                ff02::1 ip6-allnodes
+                ff02::2 ip6-allrouters
+                ff02::3 ip6-allhosts
+                10.20.20.10 ac-k8m-t01
+                10.20.21.10 ac-k8m-t02
+                10.20.22.10 ac-k8m-t03
+                10.20.20.20 ac-k8w-t01
+                10.20.21.20 ac-k8w-t02
+                10.20.22.20 ac-k8w-t03
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/systemd/system/awslogs.service:
+              content: !Sub |
+                [Unit]
+                Description=Service for CloudWatch Logs agent
+                After=rc-local.service
+
+                [Service]
+                Type=simple
+                Restart=always
+                KillMode=process
+                TimeoutSec=infinity
+                PIDFile=/var/awslogs/state/awslogs.pid
+                ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh --start --background --pidfile $PIDFILE --user awslogs --chuid awslogs &amp;
+
+                [Install]
+                WantedBy=multi-user.target
+              owner: "root"
+              group: "root"
+              mode: "000644"
+          commands:
+            sshforwarding:
+              command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+              ignoreErrors: "true"
+            settimezone:
+              command: "timedatectl set-timezone Europe/Amsterdam"
+              ignoreErrors: "true"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
     Properties:
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile2
       AvailabilityZone:
         Fn::Select:
           - 1
@@ -600,12 +783,18 @@ Resources:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install python-setuptools python-pip -y
+          hostname ac-k8w-t02
           easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          ln -s /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
           chmod +x /etc/init.d/cfn-hup
-          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8sworker2 --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8sworker2 --region ${AWS::Region}
+          sed -i 's/DAEMON=\/usr\/local\/bin\/cfn-hup/DAEMON=\/opt\/aws\/bin\/cfn-hup/g' /etc/init.d/cfn-hup
+          update-rc.d cfn-hup defaults
+          /opt/aws/bin/cfn-init -s ${AWS::StackId} --resource k8sworker2 --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+          wget https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/aws-logs.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
+          systemctl start awslogs.service && systemctl enable awslogs.service || error_exit 'Failed to start CloudWatch Logs agent'
           apt-get upgrade -y
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8sworker2 --region ${AWS::Region}
   k8smaster3int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -624,64 +813,99 @@ Resources:
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
-        configSets:
-          config1:
-            - "vars1"
-          default:
-            - ConfigSet: "config1"
-        "vars1":
-          fileconfig:
-            files:
-              /etc/cfn/cfn-hup.conf:
-                content: !Sub |
-                  [main]
-                  stack=${AWS::StackId}
-                  region=${AWS::Region}
-                  interval=1
-                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
-                  content: !Sub |
-                    [cfn-auto-reloader-hook]
-                    triggers=post.update
-                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
-                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8smaster3
-                    runas=root
-              /etc/hostname:
-                content: "ac-k8m-t03"
-                owner: "root"
-                group: "root"
-                mode: "000644"
-              /etc/hosts:
-                content: !Sub |
-                    127.0.0.1 localhost as-k8m-t03
+        config:
+          packages:
+            apt:
+              python: []
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8smaster3
+                runas=root
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /tmp/aws-logs.conf:
+              content: !Sub |
+                [general]
+                state_file = /var/awslogs/state/agent-state
 
-                    # The following lines are desirable for IPv6 capable hosts
-                    ::1 ip6-localhost ip6-loopback
-                    fe00::0 ip6-localnet
-                    ff00::0 ip6-mcastprefix
-                    ff02::1 ip6-allnodes
-                    ff02::2 ip6-allrouters
-                    ff02::3 ip6-allhosts
-                    10.20.20.10 ac-k8m-t01
-                    10.20.21.10 ac-k8m-t02
-                    10.20.22.10 ac-k8m-t03
-                    10.20.20.20 ac-k8w-t01
-                    10.20.21.20 ac-k8w-t02
-                    10.20.22.20 ac-k8w-t03
-                owner: "root"
-                group: "root"
-                mode: "000644"
-            commands:
-              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
-                ignoreErrors: "true"
-            packages:
-              apt:
-                python: []
-            services:
-              sysvinit:
-                cfn-hup:
-                  enabled: true
-                  ensureRunning: true
+                [/var/log/syslog]
+                file = /var/log/syslog
+                log_group_name = ${instanceloggroup2}
+                log_stream_name = {hostname}/syslog
+                datetime_format = %b %d %H:%M:%S
+            /etc/hostname:
+              content: "ac-k8m-t03"
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/hosts:
+              content: !Sub |
+                127.0.0.1 localhost ac-k8m-t03
+
+                # The following lines are desirable for IPv6 capable hosts
+                ::1 ip6-localhost ip6-loopback
+                fe00::0 ip6-localnet
+                ff00::0 ip6-mcastprefix
+                ff02::1 ip6-allnodes
+                ff02::2 ip6-allrouters
+                ff02::3 ip6-allhosts
+                10.20.20.10 ac-k8m-t01
+                10.20.21.10 ac-k8m-t02
+                10.20.22.10 ac-k8m-t03
+                10.20.20.20 ac-k8w-t01
+                10.20.21.20 ac-k8w-t02
+                10.20.22.20 ac-k8w-t03
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/systemd/system/awslogs.service:
+              content: !Sub |
+                [Unit]
+                Description=Service for CloudWatch Logs agent
+                After=rc-local.service
+
+                [Service]
+                Type=simple
+                Restart=always
+                KillMode=process
+                TimeoutSec=infinity
+                PIDFile=/var/awslogs/state/awslogs.pid
+                ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh --start --background --pidfile $PIDFILE --user awslogs --chuid awslogs &amp;
+
+                [Install]
+                WantedBy=multi-user.target
+              owner: "root"
+              group: "root"
+              mode: "000644"
+          commands:
+            sshforwarding:
+              command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+              ignoreErrors: "true"
+            settimezone:
+              command: "timedatectl set-timezone Europe/Amsterdam"
+              ignoreErrors: "true"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
     Properties:
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile2
       AvailabilityZone:
         Fn::Select:
           - 2
@@ -713,12 +937,18 @@ Resources:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install python-setuptools python-pip -y
+          hostname ac-k8m-t03
           easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          ln -s /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
           chmod +x /etc/init.d/cfn-hup
-          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8smaster3 --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8smaster3 --region ${AWS::Region}
+          sed -i 's/DAEMON=\/usr\/local\/bin\/cfn-hup/DAEMON=\/opt\/aws\/bin\/cfn-hup/g' /etc/init.d/cfn-hup
+          update-rc.d cfn-hup defaults
+          /opt/aws/bin/cfn-init -s ${AWS::StackId} --resource k8smaster3 --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+          wget https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/aws-logs.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
+          systemctl start awslogs.service && systemctl enable awslogs.service || error_exit 'Failed to start CloudWatch Logs agent'
           apt-get upgrade -y
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8smaster3 --region ${AWS::Region}
   k8sworker3int:
     Type: AWS::EC2::NetworkInterface
     Properties:
@@ -737,64 +967,99 @@ Resources:
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
-        configSets:
-          config1:
-            - "vars1"
-          default:
-            - ConfigSet: "config1"
-        "vars1":
-          fileconfig:
-            files:
-              /etc/cfn/cfn-hup.conf:
-                content: !Sub |
-                  [main]
-                  stack=${AWS::StackId}
-                  region=${AWS::Region}
-                  interval=1
-                /etc/cfn/hooks.d/cfn-auto-reloader.conf:
-                  content: !Sub |
-                    [cfn-auto-reloader-hook]
-                    triggers=post.update
-                    path=Resources.Server.Metadata.AWS::CloudFormation::Init
-                    action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8sworker3
-                    runas=root
-              /etc/hostname:
-                content: "ac-k8w-t03"
-                owner: "root"
-                group: "root"
-                mode: "000644"
-              /etc/hosts:
-                content: !Sub |
-                    127.0.0.1 localhost as-k8w-t03
+        config:
+          packages:
+            apt:
+              python: []
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.Server.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource k8sworker3
+                runas=root
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            /tmp/aws-logs.conf:
+              content: !Sub |
+                [general]
+                state_file = /var/awslogs/state/agent-state
 
-                    # The following lines are desirable for IPv6 capable hosts
-                    ::1 ip6-localhost ip6-loopback
-                    fe00::0 ip6-localnet
-                    ff00::0 ip6-mcastprefix
-                    ff02::1 ip6-allnodes
-                    ff02::2 ip6-allrouters
-                    ff02::3 ip6-allhosts
-                    10.20.20.10 ac-k8m-t01
-                    10.20.21.10 ac-k8m-t02
-                    10.20.22.10 ac-k8m-t03
-                    10.20.20.20 ac-k8w-t01
-                    10.20.21.20 ac-k8w-t02
-                    10.20.22.20 ac-k8w-t03
-                owner: "root"
-                group: "root"
-                mode: "000644"
-            commands:
-              - command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
-                ignoreErrors: "true"
-            packages:
-              apt:
-                python: []
-            services:
-              sysvinit:
-                cfn-hup:
-                  enabled: true
-                  ensureRunning: true
+                [/var/log/syslog]
+                file = /var/log/syslog
+                log_group_name = ${instanceloggroup2}
+                log_stream_name = {hostname}/syslog
+                datetime_format = %b %d %H:%M:%S
+            /etc/hostname:
+              content: "ac-k8w-t03"
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/hosts:
+              content: !Sub |
+                127.0.0.1 localhost ac-k8w-t03
+
+                # The following lines are desirable for IPv6 capable hosts
+                ::1 ip6-localhost ip6-loopback
+                fe00::0 ip6-localnet
+                ff00::0 ip6-mcastprefix
+                ff02::1 ip6-allnodes
+                ff02::2 ip6-allrouters
+                ff02::3 ip6-allhosts
+                10.20.20.10 ac-k8m-t01
+                10.20.21.10 ac-k8m-t02
+                10.20.22.10 ac-k8m-t03
+                10.20.20.20 ac-k8w-t01
+                10.20.21.20 ac-k8w-t02
+                10.20.22.20 ac-k8w-t03
+              owner: "root"
+              group: "root"
+              mode: "000644"
+            /etc/systemd/system/awslogs.service:
+              content: !Sub |
+                [Unit]
+                Description=Service for CloudWatch Logs agent
+                After=rc-local.service
+
+                [Service]
+                Type=simple
+                Restart=always
+                KillMode=process
+                TimeoutSec=infinity
+                PIDFile=/var/awslogs/state/awslogs.pid
+                ExecStart=/var/awslogs/bin/awslogs-agent-launcher.sh --start --background --pidfile $PIDFILE --user awslogs --chuid awslogs &amp;
+
+                [Install]
+                WantedBy=multi-user.target
+              owner: "root"
+              group: "root"
+              mode: "000644"
+          commands:
+            sshforwarding:
+              command: "echo \"AllowAgentForwarding yes\" >> /etc/ssh/sshd_config && systemctl restart ssh"
+              ignoreErrors: "true"
+            settimezone:
+              command: "timedatectl set-timezone Europe/Amsterdam"
+              ignoreErrors: "true"
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
     Properties:
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile2
       AvailabilityZone:
         Fn::Select:
           - 2
@@ -826,12 +1091,18 @@ Resources:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install python-setuptools python-pip -y
+          hostname ac-k8w-t03
           easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
-          cp -v /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d
+          ln -s /usr/local/lib/python2*/dist-packages/aws_cfn_bootstrap*/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
           chmod +x /etc/init.d/cfn-hup
-          /opt/aws/bin/cfn-init -c config1 -s ${AWS::StackId} --resource k8sworker3 --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8sworker3 --region ${AWS::Region}
+          sed -i 's/DAEMON=\/usr\/local\/bin\/cfn-hup/DAEMON=\/opt\/aws\/bin\/cfn-hup/g' /etc/init.d/cfn-hup
+          update-rc.d cfn-hup defaults
+          /opt/aws/bin/cfn-init -s ${AWS::StackId} --resource k8sworker3 --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+          wget https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+          python awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/aws-logs.conf || error_exit 'Failed to run CloudWatch Logs agent setup'
+          systemctl start awslogs.service && systemctl enable awslogs.service || error_exit 'Failed to start CloudWatch Logs agent'
           apt-get upgrade -y
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource k8sworker3 --region ${AWS::Region}
   apielb:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
     Properties:
