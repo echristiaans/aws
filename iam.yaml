@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Ascode.nl IAM User Stack
+Resources:
+  godgroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Gods
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
+        - "arn:aws:iam::aws:policy/AWSCloudTrailFullAccess"
+        - "arn:aws:iam::aws:policy/BillingFullAccess"
+  admingroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: EC2Admins
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
+  cloudtrailadmingroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: CloudTrailAdmins
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AWSCloudTrailFullAccess"
+  billingadmingroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: BillingAdmins
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/BillingFullAccess"
+  billingcheckersgroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: BillingCheckers
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/BillingViewAccess"
+  allusersgroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: allusers
+  mfapolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      Groups: !Ref allusersgroup
+      PolicyName: EnforceMFASignin
+      PolicyDocument:
+        Id: EnforceMFASignin
+        Version: 2012-10-17
+        Statement:
+          -
+            Sid: AllowAllUsersToListAccounts
+            Effect: Allow
+            Action:
+              - "iam:ListAccounAliases"
+              - "iam:ListUsers"
+              - "iam:ListVirtualMFADevices"
+              - "iam:GetAccountPasswordPolicy"
+              - "iam:GetAccountSummary"
+            Resource: "*"
+          -
+            Sid: AllowIndividualUserToSeeAndManageOnlyTheirOwnAccountInformation
+            Effect: Allow
+            Action:
+              - "iam:CreateAccessKey"
+              - "iam:DeleteAccessKey"
+              - "iam:DeleteLoginProfile"
+              - "iam:GetLoginProfile"
+              - "iam:ListAccessKeys"
+              - "iam:UpdateAccessKey"
+              - "iam:UpdateLoginProfile"
+              - "iam:ListSigningCertificates"
+              - "iam:DeleteSigningCertificate"
+              - "iam:UpdateSigningCertificate"
+              - "iam:UploadSigningCertificate"
+              - "iam:ListSSHPublicKeys"
+              - "iam:GetSSHPublicKey"
+              - "iam:DeleteSSHPublicKey"
+              - "iam:UpdateSSHPublicKey"
+              - "iam:UploadSSHPublicKey"
+            Resource: "arn:aws:iam::*:user/${aws:username}"
+          -
+            Sid: AllowIndividualUserToListOnlyTheirOwnMFA
+            Effect: Allow
+            Action:
+              - "iam:ListMFADevices"
+            Resource:
+              - "arn:aws:iam::*:mfa/*"
+              - "arn:aws:iam::*:user/${aws:username}"
+          -
+            Sid: AllowIndividualUserToManageTheirOwnMFA
+            Effect: Allow
+            Action:
+              - "iam:CreateVirtualMFADevice"
+              - "iam:DeleteVirtualMFADevice"
+              - "iam:EnableMFADevice"
+              - "iam:ResyncMFADevice"
+            Resource:
+              - "arn:aws:iam::*:mfa/${aws:username}"
+              - "arn:aws:iam::*:user/${aws:username}"
+          -
+            Sid: AllowIndividualUserToDeactivateOnlyTheirOwnMFAOnlyWhenUsingMFA
+            Effect: Allow
+            Action:
+              - "iam:DeactivateVirtualMFADevice"
+            Resource:
+              - "arn:aws:iam::*:mfa/${aws:username}"
+              - "arn:aws:iam::*:user/${aws:username}"
+            Condition:
+              Bool:
+                aws:MultiFactorAuthPresent: "true"
+          -
+            Sid: BlockMostAccessUnlessSignedInWithMFA
+            Effect: Deny
+            NotAction:
+              - "iam:ChangePassword"
+              - "iam:CreateLoginProfile"
+              - "iam:CreateVirtualMFADevice"
+              - "iam:DeleteVirtualMFADevice"
+              - "iam:EnableMFADevice"
+              - "iam:ResyncMFADevice"
+              - "iam:ListMFADevices"
+              - "iam:ListAccountAliases"
+              - "iam:ListUsers"
+              - "iam:ListSSHPublicKeys"
+              - "iam:ListAccessKeys"
+              - "iam:ListServiceSpecificCredentials"
+              - "iam:GetAccountSummary"
+              - "sts:GetSessionToken"
+            Resource: "*"
+            Condition:
+              BoolIfExists:
+                aws:MultiFactorAuthPresent: "false"
+  echristiaans:
+    Type: AWS::IAM::User
+    Properties:
+      Groups:
+        - !Ref admingroup
+        - !Ref allusersgroup
+      Path: "/"
+      LoginProfile:
+        Password: notgonnatellyou
+  echristiaansaccesskey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref echristiaans
+  AccessKeyformyaccesskey:
+  Value:
+    !Ref echristiaansaccesskey
+  SecretKeyformyaccesskey:
+    Value: !GetAtt echristiaansaccesskey.SecretAccessKey
+Outputs:
+  userechristiaans:
+    Description: Erik Christiaans IAM User Name
+    Value: !GetAtt [echristiaans, Arn]
+    Export:
+      Name: !Sub "${AWS::StackName}-iamechristiaans"
