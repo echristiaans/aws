@@ -37,6 +37,7 @@ Resources:
   cloudtrailloggroup:
     Type: AWS::Logs::LogGroup
     Properties:
+      LogGroupName: "CloudTrailLogging"
       RetentionInDays: 7
   CloudTrailLogRole:
     Type: AWS::IAM::Role

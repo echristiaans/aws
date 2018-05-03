@@ -1,0 +1,230 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Ascode.nl AWS Windows Test Instance Stack
+Parameters:
+  NetworkStackName:
+    Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group, that will be used in this stack
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: DefaultNetworkLayer
+Mappings:
+  RegionMap:
+    eu-central-1:
+      "centos73": "ami-2540f74a"
+      "windows2016": "ami-b5530b5e"
+      "ubuntu": "ami-7c412f13"
+    eu-west-1:
+      "ubuntu": ""
+Resources:
+  windows1int:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: Windows1 NetworkInterface
+      SourceDestCheck: "true"
+      PrivateIpAddress: 10.20.10.20
+      SubnetId:
+        Fn::ImportValue:
+          !Sub "${NetworkStackName}-pubsn1"
+      GroupSet:
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgrdpfromhome"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgrdpfromaegon"
+  windows1:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            c:\\cfn\\cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+            c:\\cfn\\hooks.d\\cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.windows1.Metadata.AWS::CloudFormation::Init
+                action=cfn-init.exe -v --stack ${AWS::StackId} --region ${AWS::Region} --resource windows1
+            c:\\tmp\\aws-logs.conf:
+              content: !Sub |
+                {
+                    "IsEnabled": true,
+                    "EngineConfiguration": {
+                        "PollInterval": "00:00:15",
+                        "Components": [
+                            {
+                                "Id": "ApplicationEventLog",
+                                "FullName": "AWS.EC2.Windows.CloudWatch.EventLog.EventLogInputComponent,AWS.EC2.Windows.CloudWatch",
+                                "Parameters": {
+                                    "LogName": "Application",
+                                    "Levels": "2"
+                                }
+                            },
+                            {
+                                "Id": "SystemEventLog",
+                                "FullName": "AWS.EC2.Windows.CloudWatch.EventLog.EventLogInputComponent,AWS.EC2.Windows.CloudWatch",
+                                "Parameters": {
+                                    "LogName": "System",
+                                    "Levels": "7"
+                                }
+                            },
+                            {
+                                "Id": "SecurityEventLog",
+                                "FullName": "AWS.EC2.Windows.CloudWatch.EventLog.EventLogInputComponent,AWS.EC2.Windows.CloudWatch",
+                                "Parameters": {
+                                "LogName": "Security",
+                                "Levels": "7"
+                                }
+                            },
+                            {
+                                "Id": "PerformanceCounter",
+                                "FullName": "AWS.EC2.Windows.CloudWatch.PerformanceCounterComponent.PerformanceCounterInputComponent,AWS.EC2.Windows.CloudWatch",
+                                "Parameters": {
+                                    "CategoryName": "Memory",
+                                    "CounterName": "Available MBytes",
+                                    "InstanceName": "",
+                                    "MetricName": "Memory",
+                                    "Unit": "Megabytes",
+                                    "DimensionName": "",
+                                    "DimensionValue": ""
+                                }
+                            },
+                            {
+                                "Id": "PerformanceCounter2",
+                                "FullName": "AWS.EC2.Windows.CloudWatch.PerformanceCounterComponent.PerformanceCounterInputComponent,AWS.EC2.Windows.CloudWatch",
+                                "Parameters": {
+                                    "CategoryName": "LogicalDisk",
+                                    "CounterName": "%Free Space",
+                                    "InstanceName": "C:",
+                                    "MetricName": "FreeDiskSpaceBoot",
+                                    "Unit": "Percent",
+                                    "DimensionName": "",
+                                    "DimensionValue": ""
+                                }
+                            },
+                            {
+                                "Id": "CloudWatchLogs",
+                                "FullName": "AWS.EC2.Windows.CloudWatch.CloudWatchLogsOutput,AWS.EC2.Windows.CloudWatch",
+                                "Parameters": {
+                                    "Region": "eu-central-1",
+                                    "LogGroup": "${instanceloggroup2}",
+                                    "LogStream": "{instance_id}"
+                                }
+                            },
+                            {
+                                "Id": "CloudWatch",
+                                "FullName": "AWS.EC2.Windows.CloudWatch.CloudWatch.CloudWatchOutputComponent,AWS.EC2.Windows.CloudWatch",
+                                "Parameters":
+                                {
+                                    "Region": "eu-central-1",
+                                    "NameSpace": "Windows/Default"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ec2launch.zip:
+              source: "https://s3.amazonaws.com/ec2-downloads-windows/EC2Launch/latest/EC2-Windows-Launch.zip"
+          services:
+            windows:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - "c:\\cfn\\cfn-hup.conf"
+                  - "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+    Properties:
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile2
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      DisableApiTermination: "false"
+      ImageId:
+        Fn::FindInMap:
+          - "RegionMap"
+          - Ref: "AWS::Region"
+          - "windows2016"
+      InstanceType: "t2.small"
+      KeyName: "AWSDeploy"
+      Monitoring: "false"
+      Tags:
+        - Key: "Name"
+          Value:  "ac-win-t01"
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeType: "standard"
+          DeleteOnTermination: "true"
+          VolumeSize: "30"
+      NetworkInterfaces:
+      - DeviceIndex: 0
+        NetworkInterfaceId: !Ref windows1int
+      UserData:
+        Fn::Base64: !Sub |
+          <script>"C:\Program Files\Amazon\cfn-bootstrap\cfn-init.exe" -s ${AWS::StackId} --resource windows1 --region ${AWS::Region}</script>
+          <powershell>
+          set-timezone "W. Europe Standard Time"
+          $CWADirectory = 'Amazon\AmazonCloudWatchAgent'
+          $CWAProgramFiles = "$Env:ProgramFiles\$CWADirectory"
+          Invoke-WebRequest -Uri "https://s3.amazonaws.com/amazoncloudwatch-agent/windows/amd64/latest/AmazonCloudWatchAgent.zip" -Outfile "$Env:TMP\AmazonCloudWatchAgent.zip"
+          Expand-Archive -Path "$Env:TMP\AmazonCloudWatchAgent.zip" -DestinationPath "$Env:TMP\AmazonCloudWatchAgent"
+          & cd "$Env:TMP\AmazonCloudWatchAgent"
+          & "$Env:TMP\AmazonCloudWatchAgent\install.ps1"
+          & cd "$CWAProgramFiles"
+          & "$CWAProgramFiles\amazon-cloudwatch-agent-ctl.ps1 -a fetch-config -m ec2 -c file:c:\tmp\aws-logs.conf -s"
+          </powershell>
+          <script>"C:\Program Files\Amazon\cfn-bootstrap\cfn-signal.exe" -e 0 --stack ${AWS::StackName} --resource windows1 --region ${AWS::Region}</script>
+  instanceloggroup2:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+  InstanceLogRole2:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: InstanceLogRole2
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: InstanceLogRolePolicy2
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:PutLogEvents
+            - logs:DescribeLogStreams
+            - logs:CreateLogStream
+            Resource:
+            - arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            Resource:
+            - arn:aws:s3:::*
+  LogRoleInstanceProfile2:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref InstanceLogRole2
+  AssociateEIP2:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: eipalloc-4a979364
+      NetworkInterfaceId: !Ref windows1int

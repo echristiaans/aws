@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Ascode.nl AWS Instance Stack
+  Ascode.nl AWS Windows Test Instance Stack
 Parameters:
   NetworkStackName:
     Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group, that will be used in this stack
@@ -13,25 +13,174 @@ Mappings:
   RegionMap:
     eu-central-1:
       "centos73": "ami-2540f74a"
-      "windows2016": "ami-5b7ac534"
+      "windows2016": "ami-b5530b5e"
+      "ubuntu": "ami-7c412f13"
+    eu-west-1:
+      "ubuntu": ""
 Resources:
-  instance1int:
+  windows1int:
     Type: AWS::EC2::NetworkInterface
     Properties:
-      Description: instance1 NetworkInterface
+      Description: Windows1 NetworkInterface
       SourceDestCheck: "true"
-      PrivateIpAddress: 10.20.0.10
+      PrivateIpAddress: 10.20.10.20
       SubnetId:
         Fn::ImportValue:
-          !Sub "${NetworkStackName}-sn1"
+          !Sub "${NetworkStackName}-pubsn1"
       GroupSet:
         - Fn::ImportValue:
-            !Sub "${NetworkStackName}-sgwebportsfromany"
+            !Sub "${NetworkStackName}-sgrdpfromhome"
         - Fn::ImportValue:
-            !Sub "${NetworkStackName}-sgsshfromany"
-  instance1:
+            !Sub "${NetworkStackName}-sgrdpfromaegon"
+  windows1:
     Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            c:\\cfn\\cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+            c:\\cfn\\hooks.d\\cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.windows1.Metadata.AWS::CloudFormation::Init
+                action=cfn-init.exe -v --stack ${AWS::StackId} --region ${AWS::Region} --resource windows1
+            c:\\tmp\\aws-logs.json:
+              content: !Sub |
+                {
+                      "agent": {
+                        "metrics_collection_interval": 60,
+                        "logfile": "c:\\ProgramData\\Amazon\\AmazonCloudWatchAgent\\Logs\\amazon-cloudwatch-agent.log"
+                      },
+                      "metrics": {
+                        "metrics_collected": {
+                          "Processor": {
+                            "measurement": [
+                              {"name": "% Idle Time", "rename": "CPU_IDLE", "unit": "Percent"},
+                              "% Interrupt Time",
+                              "% User Time",
+                              "% Processor Time"
+                            ],
+                            "resources": [
+                              "*"
+                            ]
+                          },
+                          "LogicalDisk": {
+                            "measurement": [
+                              {"name": "% Idle Time", "unit": "Percent"},
+                              {"name": "% Disk Read Time", "rename": "DISK_READ"},
+                              "% Disk Write Time"
+                            ],
+                            "resources": [
+                              "*"
+                            ]
+                          },
+                          "Memory": {
+                            "metrics_collection_interval": 5,
+                            "measurement": [
+                              "Available Bytes",
+                              "Cache Faults/sec",
+                              "Page Faults/sec",
+                              "Pages/sec"
+                            ]
+                          },
+                          "Network Interface": {
+                            "metrics_collection_interval": 5,
+                            "measurement": [
+                              "Bytes Received/sec",
+                              "Bytes Sent/sec",
+                              "Packets Received/sec",
+                              "Packets Sent/sec"
+                            ],
+                            "resources": [
+                              "*"
+                            ]
+                          },
+                          "System": {
+                            "measurement": [
+                              "Context Switches/sec",
+                              "System Calls/sec",
+                              "Processor Queue Length"
+                            ]
+                          }
+                        }
+                      },
+                      "logs": {
+                        "logs_collected": {
+                          "files": {
+                            "collect_list": [
+                              {
+                                "file_path": "c:\\ProgramData\\Amazon\\EC2-Windows\\Launch\\Log\\EC2Launch.log",
+                                "log_group_name": "${instanceloggroup}",
+                                "log_stream_name": "{hostname}/EC2Launch.log"
+                              },
+                              {
+                                "file_path": "c:\\ProgramData\\Amazon\\EC2-Windows\\Launch\\Log\\UserdataExecution.log",
+                                "log_group_name": "${instanceloggroup}",
+                                "log_stream_name": "{hostname}/UserdataExecution.log"
+                              },
+                              {
+                                "file_path": "C:\\ProgramData\\Amazon\\AmazonCloudWatchAgent\\Logs\\amazon-cloudwatch-agent.log",
+                                "log_group_name": "${instanceloggroup}",
+                                "log_stream_name": "{hostname}/amazon-cloudwatch-agent.log"
+                              }
+                            ]
+                          },
+                          "windows_events": {
+                            "collect_list": [
+                              {
+                                "event_name": "System",
+                                "event_levels": [
+                                  "WARNING",
+                                  "CRITICAL",
+                                  "ERROR"
+                                ],
+                                "log_group_name": "${instanceloggroup}",
+                                "log_stream_name": "{hostname}/SystemEventLog",
+                                "event_format": "xml"
+                              },
+                              {
+                                "event_name": "Security",
+                                "event_levels": [
+                                  "VERBOSE"
+                                ],
+                                "log_group_name": "${instanceloggroup}",
+                                "log_stream_name": "{hostname}/SecurityEventLog",
+                                "event_format": "xml"
+                              },
+                              {
+                                "event_name": "Application",
+                                "event_levels": [
+                                  "WARNING",
+                                  "CRITICAL",
+                                  "ERROR"
+                                ],
+                                "log_group_name": "${instanceloggroup}",
+                                "log_stream_name": "{hostname}/ApplicationEventLog",
+                                "event_format": "xml"
+                              }
+                            ]
+                          }
+                        },
+                        "log_stream_name": "{hostname}/collectedLogs"
+                      }
+                    }
+          services:
+            windows:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - "c:\\cfn\\cfn-hup.conf"
+                  - "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
     Properties:
+      IamInstanceProfile:
+        Ref: LogRoleInstanceProfile2
       AvailabilityZone:
         Fn::Select:
           - 0
@@ -41,20 +190,88 @@ Resources:
         Fn::FindInMap:
           - "RegionMap"
           - Ref: "AWS::Region"
-          - "centos73"
-      InstanceType: "t2.nano"
+          - "windows2016"
+      InstanceType: "t2.medium"
       KeyName: "AWSDeploy"
       Monitoring: "false"
       Tags:
         - Key: "Name"
-          Value:  "instance1"
+          Value:  "ac-win-t01"
       BlockDeviceMappings:
       - DeviceName: "/dev/sda1"
         Ebs:
-          Encrypted: true
           VolumeType: "standard"
           DeleteOnTermination: "true"
-          VolumeSize: "50"
+          VolumeSize: "30"
       NetworkInterfaces:
       - DeviceIndex: 0
-        NetworkInterfaceId: !Ref instance1int
+        NetworkInterfaceId: !Ref windows1int
+      UserData:
+        Fn::Base64: !Sub |
+          <powershell>
+          Rename-Computer -NewName "AC-WIN-T01"
+          set-timezone "W. Europe Standard Time"
+          & "C:\Program Files\Amazon\cfn-bootstrap\cfn-init.exe" -s ${AWS::StackId} --resource windows1 --region ${AWS::Region}
+          $CWADirectory = 'Amazon\AmazonCloudWatchAgent'
+          $CWAProgramFiles = "$Env:ProgramFiles\$CWADirectory"
+          Invoke-WebRequest -Uri "https://s3.amazonaws.com/amazoncloudwatch-agent/windows/amd64/latest/AmazonCloudWatchAgent.zip" -Outfile "$Env:TMP\AmazonCloudWatchAgent.zip"
+          Expand-Archive -Path "$Env:TMP\AmazonCloudWatchAgent.zip" -DestinationPath "$Env:TMP\AmazonCloudWatchAgent"
+          & cd "$Env:TMP\AmazonCloudWatchAgent"
+          & "$Env:TMP\AmazonCloudWatchAgent\install.ps1"
+          & cd "$CWAProgramFiles"
+          & "$CWAProgramFiles\amazon-cloudwatch-agent-ctl.ps1" -a fetch-config -m ec2 -c file:c:\tmp\aws-logs.json -s
+          & "C:\Program Files\Amazon\cfn-bootstrap\cfn-signal.exe" -e 0 --stack ${AWS::StackName} --resource windows1 --region ${AWS::Region}
+          </powershell>
+  instanceloggroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "EC2InstanceLogging"
+      RetentionInDays: 7
+  InstanceLogRole2:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: InstanceLogRole2
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: InstanceLogRolePolicy2
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:PutLogEvents
+            - logs:DescribeLogStreams
+            - logs:CreateLogStream
+            Resource:
+            - arn:aws:logs:*:*:*
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            Resource:
+            - arn:aws:s3:::*
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource:
+            - "*"
+  LogRoleInstanceProfile2:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref InstanceLogRole2
+  AssociateEIP2:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: eipalloc-4a979364
+      NetworkInterfaceId: !Ref windows1int

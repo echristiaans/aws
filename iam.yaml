@@ -42,7 +42,7 @@ Resources:
     Type: AWS::IAM::Policy
     Properties:
       Groups: !Ref allusersgroup
-      PolicyName: EnforceMFASignin
+      PolicyName: Force_MFA
       PolicyDocument:
         Id: EnforceMFASignin
         Version: 2012-10-17
