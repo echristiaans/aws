@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Ascode.nl IAM User Stack
+  Ascode.nl IAM Users, Roles and Policies Stack
 Resources:
   godgroup:
     Type: AWS::IAM::Group
@@ -9,7 +9,7 @@ Resources:
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AdministratorAccess"
         - "arn:aws:iam::aws:policy/AWSCloudTrailFullAccess"
-        - "arn:aws:iam::aws:policy/BillingFullAccess"
+        - "arn:aws:iam::aws:policy/job-function/Billing"
   admingroup:
     Type: AWS::IAM::Group
     Properties:
@@ -27,21 +27,53 @@ Resources:
     Properties:
       GroupName: BillingAdmins
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/BillingFullAccess"
-  billingcheckersgroup:
+        - "arn:aws:iam::aws:policy/job-function/Billing"
+  billingviewersgroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: BillingCheckers
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/BillingViewAccess"
+      GroupName: BillingViewers
   allusersgroup:
     Type: AWS::IAM::Group
     Properties:
       GroupName: allusers
+  billingviewpolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      Groups:
+        - !Ref billingviewersgroup
+      PolicyName: View_Billing
+      PolicyDocument:
+        Id: Billing_View
+        Version: 2012-10-17
+        Statement:
+          -
+            Sid: AllowViewingOfBills
+            Effect: Allow
+            Action:
+              - "aws-portal:ViewBilling"
+              - "awsbillingconsole:ViewBilling"
+              - "aws-portal:ViewPaymentMethods"
+              - "awsbillingconsole:ViewPaymentMethods"
+              - "aws-portal:ViewUsage"
+              - "awsbillingconsole:ViewUsage"
+            Resource: "*"
+          -
+            Sid: AllowViewingOfBudget
+            Effect: Allow
+            Action:
+              - "budgets:ViewBudget"
+            Resource: "*"
+          -
+            Sid: AllowViewingOfReports
+            Effect: Allow
+            Action:
+              - "cur:DescribeReportDefinitions"
+            Resource: "*"
   mfapolicy:
     Type: AWS::IAM::Policy
     Properties:
-      Groups: !Ref allusersgroup
+      Groups:
+        - !Ref allusersgroup
       PolicyName: Force_MFA
       PolicyDocument:
         Id: EnforceMFASignin
@@ -130,6 +162,42 @@ Resources:
             Condition:
               BoolIfExists:
                 aws:MultiFactorAuthPresent: "false"
+  vmimportrole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: vmimport
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - vmie.amazonaws.com
+          Action:
+          - sts:AssumeRole
+          Condition:
+            StringEquals:
+              sts:Externalid: "vmimport"
+      Policies:
+      - PolicyName: VMImportRolePolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:ModifySnapshotAttribute
+            - ec2:CopySnapshot
+            - ec2:RegisterImage
+            - ec2:Describe
+            Resource:
+            - "*"
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:ListBucket
+            - s3:GrtBucketLocation
+            Resource:
+            - arn:aws:s3:::*
   echristiaans:
     Type: AWS::IAM::User
     Properties:
@@ -137,20 +205,20 @@ Resources:
         - !Ref admingroup
         - !Ref allusersgroup
       Path: "/"
+      UserName: "echristiaans"
       LoginProfile:
-        Password: notgonnatellyou
+        Password: "MyP@ssword01:-)"
   echristiaansaccesskey:
     Type: AWS::IAM::AccessKey
     Properties:
       UserName: !Ref echristiaans
-  AccessKeyformyaccesskey:
-  Value:
-    !Ref echristiaansaccesskey
-  SecretKeyformyaccesskey:
-    Value: !GetAtt echristiaansaccesskey.SecretAccessKey
 Outputs:
   userechristiaans:
     Description: Erik Christiaans IAM User Name
     Value: !GetAtt [echristiaans, Arn]
     Export:
       Name: !Sub "${AWS::StackName}-iamechristiaans"
+  accessKeyformyaccesskey:
+    Value: !Ref echristiaansaccesskey
+  SecretKeyformyaccesskey:
+    Value: !GetAtt echristiaansaccesskey.SecretAccessKey
