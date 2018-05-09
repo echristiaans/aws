@@ -178,6 +178,12 @@ Resources:
           Condition:
             StringEquals:
               sts:Externalid: "vmimport"
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
       Policies:
       - PolicyName: VMImportRolePolicy
         PolicyDocument:
@@ -188,14 +194,14 @@ Resources:
             - ec2:ModifySnapshotAttribute
             - ec2:CopySnapshot
             - ec2:RegisterImage
-            - ec2:Describe
+            - ec2:Describe*
             Resource:
             - "*"
           - Effect: Allow
             Action:
             - s3:GetObject
             - s3:ListBucket
-            - s3:GrtBucketLocation
+            - s3:GetBucketLocation
             Resource:
             - arn:aws:s3:::*
   echristiaans:
