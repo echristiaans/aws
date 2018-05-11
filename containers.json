@@ -1,0 +1,9 @@
+[
+  {
+    "Description": "Packer OVA",
+    "Format": "ova",
+    "UserBucket": {
+        "S3Bucket": "dirtybit",
+        "S3Key": "packer-import-1525855905.ova"
+    }
+}]
