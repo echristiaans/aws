@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Ascode.nl RDS instances
+Parameters:
+  NetworkStackName:
+    Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group, that will be used in this stack
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+    Default: DefaultNetworkLayer
+Resources:
+  dbsubnetgroup1:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "ascode.nl DB subnet group 1"
+      SubnetIds:
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-privsn1"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-privsn2"
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-privsn3"
+  sqlrds1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
+      AllocatedStorage: "200" # for Enterprise and Standard, any value between 200 and 16384. For Web and Express, any value between 20 and 16384
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      BackupRetentionPeriod: "7"
+      DBInstanceClass: "db.m4.large"
+      DBInstanceIdentifier: "AC-DB-T01"
+      #DBName: "Testing123"
+      DBParameterGroupName: !Ref sqlrds1parameters
+      DBSubnetGroupName: !Ref dbsubnetgroup1
+      #Domain: "aws.aegon.nl"
+      #DomainIAMRoleName: ""
+      Engine: "sqlserver-se"
+      EngineVersion: "13.00.4451.0.v1" # https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_CreateDBInstance.html
+      LicenseModel: "license-included"
+      MasterUsername: "ascodesqladmin"
+      MasterUserPassword: "MyP(ssword01"
+      MonitoringInterval: 0 # 0, 1, 5, 10, 15, 30, 60 - default 0 which means no collecting of enhanced monitoring
+      #MonitoringRoleArn: ""
+      VPCSecurityGroups:
+        - Fn::ImportValue:
+            !Sub "${NetworkStackName}-sgsqlfromwebservers"
+      StorageEncrypted: true
+      StorageType: "gp2" # standard = magnetic, io1 = iops
+      PreferredBackupWindow: 01:00-06:00 # Must be in the format hh24:mi-hh24:mi.
+      PreferredMaintenanceWindow: Sun:06:05-Sun:23:00 # Must be in the format ddd:hh24:mi-ddd:hh24:mi, must not overlap with backup window
+      PubliclyAccessible: false
+      CopyTagsToSnapshot: true
+    DeletionPolicy: "Snapshot"
+  sqlrds1parameters:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: "SQL RDS Secure Parameter Group with Auditing"
+      Family: sqlserver-se-13.0 #sqlserver-ee-11.0, sqlserver-ex-11.0, sqlserver-web-11.0
+      Parameters:
+        rds.sqlserver_audit: fedramp_hipaa
+        rds.force_ssl: 1
