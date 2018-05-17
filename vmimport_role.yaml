@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Ascode.nl IAM roles and policies Stack
+Resources:
+  vmimportrole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: vmimport
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - vmie.amazonaws.com
+          Action:
+          - sts:AssumeRole
+          Condition:
+            StringEquals:
+              sts:Externalid: "vmimport"
+      Policies:
+      - PolicyName: VMImportRolePolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:ModifySnapshotAttribute
+            - ec2:CopySnapshot
+            - ec2:RegisterImage
+            - ec2:Describe
+            Resource:
+            - "*"
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:ListBucket
+            - s3:GrtBucketLocation
+            Resource:
+            - arn:aws:s3:::*

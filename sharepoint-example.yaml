@@ -1,0 +1,711 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "AdminUser": {
+            "Type": "String",
+            "Description": "This will be the Admin user used to install all the binaries and initial SharePoint configs"
+        },
+        "PasswordAdminUser": {
+            "Type": "String",
+            "MinLength": "6",
+            "Description": "This will be the Admin user used to install all the binaries and initial SharePoint configs"
+        },
+        "URLSQLInstaller": {
+            "Type": "String",
+            "Description": "Location of the ZIP file with SQL Server 2012 Installer (zip)"
+        },
+        "URLSHPInstaller": {
+            "Type": "String",
+            "Description": "Location of the ZIP file with SharePoint Server 2013 Installer (zip)"
+        },
+        "URLShPConfigScriptInstaller": {
+            "Type": "String",
+            "Description": "Location of the PowerShell config script"
+        },
+        "URLAutoSPInstaller": {
+            "Type": "String",
+            "Description": "Location of the AutoSPInstaller ZIP file"
+        },
+        "URLSHPInstallSPFiles": {
+            "Type": "String",
+            "Description": "Location of the bat file which will call a PowerShell script and run the prerequisiteinstaller.exe"
+        },
+        "URLConfigXML": {
+            "Type": "String",
+            "Description": "Location of the Config.xml for the unattended SharePoint installation"
+        },
+        "SharePointKEY": {
+            "Type": "String",
+            "Description": "License KEY for the corresponding SharePoint version being used by the Template"
+        },
+        "LocalDomain": {
+            "Type": "String",
+            "Description": "Example: sharepointtests.com"
+        },
+        "NETBIOSName": {
+            "Type": "String",
+            "Description": "Should be the same as the LocalDomain, without the .com, .local etc"
+        },
+        "ComputerName": {
+            "Type": "String",
+            "Description": "Name of the Single Server"
+        },
+        "SUBNETID": {
+            "Type": "AWS::EC2::Subnet::Id",
+            "Description": "ID of the existing Subnet"
+        },
+        "SECURITYGROUPID": {
+            "Type": "AWS::EC2::SecurityGroup::Id",
+            "Description": "ID of an existing Security Group"
+        },
+        "KEYPAIR": {
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Description": "EC2 KeyPair"
+        },
+        "INSTANCETYPE": {
+            "Type": "String",
+            "Description": "EC2 KeyPair",
+            "Default": "t2.medium"
+        }
+    },
+    "Resources": {
+        "TestDrivePublicIP": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "InstanceId": {
+                    "Ref": "Instance"
+                }
+            }
+        },
+        "Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "configSets": {
+                        "config": [
+                            "1-setup",
+                            "2-rename",
+                            "3-installADDS",
+                            "4-extractInstallers",
+                            "5-installSQL",
+                            "6-installPreReqs1",
+                            "7-installPreReqs2",
+                            "8-installSP2013"
+                        ]
+                    },
+                    "1-setup": {
+                        "files": {
+                            "c:\\cfn\\cfn-hup.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "[main]\n",
+                                            "stack=",
+                                            {
+                                                "Ref": "AWS::StackName"
+                                            },
+                                            "\n",
+                                            "region=",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.Instance.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=cfn-init.exe -v -c config -s ",
+                                            {
+                                                "Ref": "AWS::StackId"
+                                            },
+                                            " -r Instance",
+                                            " --region ",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\installers\\sqlinstaller.zip": {
+                                "source": {
+                                    "Ref": "URLSQLInstaller"
+                                }
+                            },
+                            "c:\\installers\\AutoSPInstaller.zip": {
+                                "source": {
+                                    "Ref": "URLAutoSPInstaller"
+                                }
+                            },
+                            "c:\\installers\\sharepointinstaller.zip": {
+                                "source": {
+                                    "Ref": "URLSHPInstaller"
+                                }
+                            },
+                            "c:\\cfn\\scripts\\Install-SPFiles.ps1": {
+                                "source": {
+                                    "Ref": "URLSHPInstallSPFiles"
+                                }
+                            },
+                            "c:\\cfn\\scripts\\InstallSPFiles.bat": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -ExecutionPolicy RemoteSigned -Command c:\\cfn\\scripts\\Install-SPFiles.ps1",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\scripts\\Install-SP2013.ps1": {
+                                "source": {
+                                    "Ref": "URLShPConfigScriptInstaller"
+                                }
+                            },
+                            "c:\\cfn\\scripts\\InstallSP2013.bat": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -ExecutionPolicy RemoteSigned -Command c:\\cfn\\scripts\\Install-SP2013.ps1 -SQLServer ",
+                                            {
+                                                "Ref": "ComputerName"
+                                            },
+                                            "\\SHAREPOINT",
+                                            " -SPFarmAccount ",
+                                            {
+                                                "Ref": "NETBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref": "AdminUser"
+                                            },
+                                            " -Password ",
+                                            {
+                                                "Ref": "PasswordAdminUser"
+                                            },
+                                            " -Key ",
+                                            {
+                                                "Ref": "SharePointKEY"
+                                            },
+                                            " -CreateFarm",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\scripts\\config.xml": {
+                                "source": {
+                                    "Ref": "URLConfigXML"
+                                }
+                            }
+                        },
+                        "services": {
+                            "windows": {
+                                "cfn-hup": {
+                                    "enabled": "true",
+                                    "ensureRunning": "true",
+                                    "files": [
+                                        "c:\\cfn\\cfn-hup.conf",
+                                        "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+                                    ]
+                                }
+                            }
+                        },
+                        "commands": {
+                            "a-disable-win-fw": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"Get-NetFirewallProfile | Set-NetFirewallProfile -Enabled False\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "b-set-execution-policy": {
+                                "command": "powershell.exe -command Set-ExecutionPolicy Unrestricted -Force",
+                                "waitAfterCompletion": "0"
+                            }
+                        }
+                    },
+                    "2-rename": {
+                        "commands": {
+                            "a-execute-powershell-script-RenameComputer": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe Rename-Computer -NewName ",
+                                            {
+                                                "Ref": "ComputerName"
+                                            },
+                                            " -Restart"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "forever"
+                            }
+                        }
+                    },
+                    "3-installADDS": {
+                        "commands": {
+                            "1-install-prereqs": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"Install-WindowsFeature AD-Domain-Services, rsat-adds -IncludeAllSubFeature\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "2-install-adds": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"Install-ADDSForest -DomainName ",
+                                            {
+                                                "Ref": "LocalDomain"
+                                            },
+                                            " ",
+                                            "-SafeModeAdministratorPassword (convertto-securestring ",
+                                            {
+                                                "Ref": "PasswordAdminUser"
+                                            },
+                                            " -asplaintext -force) ",
+                                            "-DomainMode Win2012 ",
+                                            "-DomainNetbiosName ",
+                                            {
+                                                "Ref": "NETBIOSName"
+                                            },
+                                            " ",
+                                            "-ForestMode Win2012 ",
+                                            "-Confirm:$false ",
+                                            "-Force\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "forever"
+                            },
+                            "3-restart-service": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Restart-Service NetLogon -EA 0"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "180"
+                            },
+                            "4-create-adminuser": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"New-ADUser ",
+                                            "-Name ",
+                                            {
+                                                "Ref": "AdminUser"
+                                            },
+                                            " ",
+                                            "-UserPrincipalName ",
+                                            {
+                                                "Ref": "AdminUser"
+                                            },
+                                            "@",
+                                            {
+                                                "Ref": "LocalDomain"
+                                            },
+                                            " ",
+                                            "-AccountPassword (ConvertTo-SecureString ",
+                                            {
+                                                "Ref": "PasswordAdminUser"
+                                            },
+                                            " -AsPlainText -Force) ",
+                                            "-Enabled $true ",
+                                            "-PasswordNeverExpires $true\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "5-update-adminuser": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -ExecutionPolicy Unrestricted -Command \"Add-ADGroupMember -Identity 'Domain Admins' -Members ",
+                                            {
+                                                "Ref": "AdminUser"
+                                            },
+                                            ";Add-ADGroupMember -Identity 'Schema Admins' -Members ",
+                                            {
+                                                "Ref": "AdminUser"
+                                            },
+                                            ";Add-ADGroupMember -Identity 'Enterprise Admins' -Members ",
+                                            {
+                                                "Ref": "AdminUser"
+                                            },
+                                            ";\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            }
+                        }
+                    },
+                    "4-extractInstallers": {
+                        "commands": {
+                            "1-extractSQLInstaller": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"Add-Type -assembly 'system.io.compression.filesystem'; [io.compression.zipfile]::ExtractToDirectory('c:\\installers\\sqlinstaller.zip','c:\\installers\\sqlinstaller')\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "10"
+                            },
+                            "2-extractAutoSPInstaller": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"Add-Type -assembly 'system.io.compression.filesystem'; [io.compression.zipfile]::ExtractToDirectory('c:\\installers\\AutoSPInstaller.zip','c:\\')\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "10"
+                            },
+                            "3-extractSharePointInstaller": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"Add-Type -assembly 'system.io.compression.filesystem'; [io.compression.zipfile]::ExtractToDirectory('c:\\installers\\sharepointinstaller.zip','c:\\sp\\2013\\sharepoint')\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "10"
+                            }
+                        }
+                    },
+                    "5-installSQL": {
+                        "commands": {
+                            "1-runSetup": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"Set-ExecutionPolicy Unrestricted -Force;c:\\installers\\sqlinstaller\\Setup.exe /q /Action=Install /Hideconsole /Features=SQL,Tools /InstanceName=SHAREPOINT /SQLCOLLATION='Latin1_General_CI_AS_KS_WS' /SQLSYSADMINACCOUNTS='Builtin\\Administrators' /SQLSVCACCOUNT='",
+                                            {
+                                                "Ref": "NETBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref": "AdminUser"
+                                            },
+                                            "' /IAcceptSQLServerLicenseTerms=$true /SQLSVCPASSWORD='",
+                                            {
+                                                "Ref": "PasswordAdminUser"
+                                            },
+                                            "' /UpdateEnabled=$false\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "2-restartServer": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command \"Restart-Computer\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "forever"
+                            }
+                        }
+                    },
+                    "6-installPreReqs1": {
+                        "commands": {
+                            "a-install-rds": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -ExecutionPolicy RemoteSigned -Command Install-WindowsFeature Net-Framework-Features,Web-Server,Web-WebServer,Web-Common-Http,Web-Static-Content,Web-Default-Doc,Web-Dir-Browsing,Web-Http-Errors,Web-App-Dev,Web-Asp-Net,Web-Net-Ext,Web-ISAPI-Ext,Web-ISAPI-Filter,Web-Health,Web-Http-Logging,Web-Log-Libraries,Web-Request-Monitor,Web-Http-Tracing,Web-Security,Web-Basic-Auth,Web-Windows-Auth,Web-Filtering,Web-Digest-Auth,Web-Performance,Web-Stat-Compression,Web-Dyn-Compression,Web-Mgmt-Tools,Web-Mgmt-Console,Web-Mgmt-Compat,Web-Metabase,Application-Server,AS-Web-Support,AS-TCP-Port-Sharing,AS-WAS-Support,AS-HTTP-Activation,AS-TCP-Activation,AS-Named-Pipes,AS-Net-Framework,WAS,WAS-Process-Model,WAS-NET-Environment,WAS-Config-APIs,Web-Lgcy-Scripting,Windows-Identity-Foundation,Server-Media-Foundation,Xps-Viewer -Restart"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "7-installPreReqs2": {
+                        "commands": {
+                            "a-enable-autologon": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -ExecutionPolicy RemoteSigned -Command ",
+                                            "\"New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon -Value 1;",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName -Value ",
+                                            {
+                                                "Ref": "AdminUser"
+                                            },
+                                            "@",
+                                            {
+                                                "Ref": "LocalDomain"
+                                            },
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword -Value ",
+                                            {
+                                                "Ref": "PasswordAdminUser"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "b-set-startup-script": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -ExecutionPolicy RemoteSigned -Command ",
+                                            "\"New-ItemProperty -Path HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce -Name InstallSPFiles -Value C:\\cfn\\scripts\\InstallSPFiles.bat",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "c-reboot": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Restart-Computer -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "forever"
+                            }
+                        }
+                    },
+                    "8-installSP2013": {
+                        "commands": {
+                            "a-wait": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Start-Sleep -Seconds 180"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "b-set-startup-script": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -ExecutionPolicy RemoteSigned -Command ",
+                                            "\"New-ItemProperty -Path HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce -Name InstallSPFiles2 -Value C:\\cfn\\scripts\\InstallSP2013.bat",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "c-reboot": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Restart-Computer -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "forever"
+                            },
+                            "d-disableLoopbackCheck": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -ExecutionPolicy RemoteSigned -Command ",
+                                            "\"New-ItemProperty -Path HKLM:\\System\\CurrentControlSet\\Control\\Lsa -Name DisableLoopbackCheck -value 1 -PropertyType dword -Force\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "e-wait": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Start-Sleep -Seconds 1200"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "f-createNewWebApplication": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe -ExecutionPolicy RemoteSigned -Command \"",
+                                            "Add-PSSnapin 'microsoft.sharepoint.powershell';",
+                                            "$ap = New-SPAuthenticationProvider;",
+                                            "New-SPWebApplication -Name 'SharePoint Test Drive' -URL 'http://",
+                                            {
+                                                "Ref": "ComputerName"
+                                            },
+                                            ".",
+                                            {
+                                                "Ref": "LocalDomain"
+                                            },
+                                            "' -Port 80 -ApplicationPool 'PortalAppPool' -ApplicationPoolAccount (Get-SPManagedAccount '",
+                                            {
+                                                "Ref": "NETBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref": "AdminUser"
+                                            },
+                                            "') -AuthenticationProvider $ap;",
+                                            "New-SPSite -URL 'http://",
+                                            {
+                                                "Ref": "ComputerName"
+                                            },
+                                            ".",
+                                            {
+                                                "Ref": "LocalDomain"
+                                            },
+                                            "' -Name 'SharePoint Test Drive' -Template 'STS#0' -OwnerAlias '",
+                                            {
+                                                "Ref": "NETBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref": "AdminUser"
+                                            },
+                                            "';",
+                                            "$publicIP = invoke-restmethod -uri 'http://169.254.169.254/latest/meta-data/public-ipv4';",
+                                            "$publicIPAddress = 'http://' + $publicIP;",
+                                            "New-SPAlternateURL $publicIPAddress -Zone Internet -WebApplication 'http://",
+                                            {
+                                                "Ref": "ComputerName"
+                                            },
+                                            ".",
+                                            {
+                                                "Ref": "LocalDomain"
+                                            },
+                                            "';",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            }
+                        }
+                    }
+                }
+            },
+            "Properties": {
+                "InstanceType": {
+                    "Ref": "INSTANCETYPE"
+                },
+                "SubnetId": {
+                    "Ref": "SUBNETID"
+                },
+                "ImageId": "ami-90d7ccfc",
+                "EbsOptimized": "false",
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "SECURITYGROUPID"
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "KEYPAIR"
+                },
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {
+                            "VolumeSize": "45",
+                            "VolumeType": "gp2"
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "<powershell>\n",
+                                "Set-ExecutionPolicy Unrestricted -Force\n",
+                                "cfn-init.exe -v -c config -s ",
+                                {
+                                    "Ref": "AWS::StackId"
+                                },
+                                " -r Instance",
+                                " --region ",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "\n",
+                                "cfn-signal.exe -e 0 '",
+                                {
+                                    "Ref": "InstanceWaitHandle"
+                                },
+                                "'\n",
+                                "</powershell>\n"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "InstanceWaitCondition": {
+            "Type": "AWS::CloudFormation::WaitCondition",
+            "DependsOn": "Instance",
+            "Properties": {
+                "Handle": {
+                    "Ref": "InstanceWaitHandle"
+                },
+                "Timeout": "5400"
+            }
+        },
+        "InstanceWaitHandle": {
+            "Type": "AWS::CloudFormation::WaitConditionHandle"
+        }
+    },
+    "Outputs": {}
+}

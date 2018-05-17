@@ -220,6 +220,16 @@ Resources:
       SecurityGroupIngress:
       - IpProtocol: "-1"
         CidrIp: 10.20.0.0/16
+  sgsqlfromwebservers:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SQL Server ports from specified servers
+      VpcId: !Ref vpc1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: "1433"
+          ToPort: "1433"
+          CidrIp: 10.20.20.100/32
 Outputs:
   vpc1ID:
     Description: VPC 1
@@ -296,3 +306,8 @@ Outputs:
     Value: !GetAtt sgrdpfromaegon.GroupId
     Export:
       Name: !Sub "${AWS::StackName}-sgrdpfromaegon"
+  sgsqlfromwebservers:
+    Description: The security group to use for RDP access from home
+    Value: !GetAtt sgsqlfromwebservers.GroupId
+    Export:
+      Name: !Sub "${AWS::StackName}-sgsqlfromwebservers"

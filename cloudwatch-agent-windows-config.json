@@ -93,7 +93,10 @@
               {
                 "event_name": "Security",
                 "event_levels": [
-                  "VERBOSE"
+                  "CRITICAL",
+                  "WARNING",
+                  "INFORMATION",
+                  "ERROR"
                 ],
                 "log_group_name": "${instanceloggroup}",
                 "log_stream_name": "{hostname}/SecurityEventLog",
